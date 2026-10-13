@@ -392,6 +392,44 @@ describe("talk.catalog handler", () => {
     mocks.listRealtimeVoiceProviders.mockReturnValue([]);
   });
 
+  it("reads independent provider sections while speech availability is pending", async () => {
+    const realtimeRead = createDeferred<boolean>();
+    mocks.listSpeechProviders.mockReturnValue([
+      {
+        id: "speech",
+        label: "Speech",
+        isConfiguredAsync: () => realtimeRead.promise,
+      },
+    ] as never);
+    mocks.listRealtimeVoiceProviders.mockReturnValue([
+      {
+        id: "realtime",
+        label: "Realtime",
+        isConfigured: () => {
+          realtimeRead.resolve(true);
+          return true;
+        },
+      },
+    ] as never);
+    mocks.resolveConfiguredRealtimeVoiceProviderAsync.mockReturnValue({
+      provider: { id: "realtime" },
+    });
+    const respond = vi.fn();
+    await callTalkHandler("talk.catalog", {
+      params: {},
+      respond,
+      config: { talk: { realtime: { provider: "realtime" } } },
+    });
+    expectRespondOk(respond, {
+      speech: expect.objectContaining({
+        providers: [expect.objectContaining({ id: "speech", configured: true })],
+      }),
+      realtime: expect.objectContaining({
+        providers: [expect.objectContaining({ id: "realtime", configured: true })],
+      }),
+    });
+  });
+
   it("rejects an ambiguous owner before discovering catalog providers", async () => {
     const respond = vi.fn();
     await mocks.listRealtimeTranscriptionProviders.withImplementation(
@@ -2042,9 +2080,24 @@ describe("talk.session unified handlers", () => {
       sessionKey: "agent:main:main",
     });
 
+    for (const [sessionId, connId, message] of [
+      [" \nunknown-session\t ", "conn-1", "Error: Unknown Talk session"],
+      ["relay-unified-1", "conn-other", "Error: Talk session is not owned by this connection"],
+    ] as const) {
+      const rejectedClose = vi.fn();
+      await callTalkHandler("talk.session.close", {
+        params: { sessionId },
+        client: { connId },
+        respond: rejectedClose,
+        context: {},
+      });
+      expectRespondError(rejectedClose, { code: ErrorCodes.UNAVAILABLE, message });
+    }
+    expect(mocks.stopTalkRealtimeRelaySession).not.toHaveBeenCalled();
+
     const closeRespond = vi.fn();
     await callTalkHandler("talk.session.close", {
-      params: { sessionId: "relay-unified-1" },
+      params: { sessionId: " \nrelay-unified-1\t " },
       id: "6",
       respond: closeRespond,
       context: {},
@@ -2054,6 +2107,16 @@ describe("talk.session unified handlers", () => {
       connId: "conn-1",
     });
     expect(closeRespond).toHaveBeenCalledWith(true, { ok: true }, undefined);
+    const closedSession = vi.fn();
+    await callTalkHandler("talk.session.close", {
+      params: { sessionId: "relay-unified-1" },
+      respond: closedSession,
+      context: {},
+    });
+    expectRespondError(closedSession, {
+      code: ErrorCodes.UNAVAILABLE,
+      message: "Error: Unknown Talk session",
+    });
   });
 
   it("uses talk.agentId and projects an opaque model from a bare realtime session", async () => {
