@@ -170,6 +170,7 @@ describe("createOpenClawTools context wiring", () => {
         },
         agentSessionKey,
         sandboxAgentId: "main",
+        sandboxed: true,
         runSessionKey,
         onYield: vi.fn(),
       });
