@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { expectDefined } from "@openclaw/normalization-core/expect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../../test/helpers/promise.js";
 import type { GatewayBrowserClient, GatewayEventFrame } from "../../api/gateway.ts";
@@ -30,6 +31,10 @@ useRealtimeTalkMicrophoneFixture();
 function fixture() {
   const transcript = createDeferred();
   const close = createDeferred();
+  const closeStarted = createDeferred();
+  const replacementStarted = createDeferred();
+  const transportStopped = createDeferred();
+  transports.stop.mockImplementation(() => transportStopped.resolve());
   const saved: string[] = [];
   const snapshots: string[][] = [];
   const listeners = new Set<(event: GatewayEventFrame) => void>();
@@ -39,6 +44,9 @@ function fixture() {
     }
     if (method === "talk.client.create") {
       snapshots.push([...saved]);
+      if (snapshots.length === 2) {
+        replacementStarted.resolve();
+      }
       return {
         provider: "openai",
         transport: "webrtc",
@@ -51,6 +59,7 @@ function fixture() {
       saved.push(String(params?.text));
     }
     if (method === "talk.client.close") {
+      closeStarted.resolve();
       await close.promise;
       saved.push("Provider final speech");
     }
@@ -76,6 +85,9 @@ function fixture() {
     state,
     transcript,
     close,
+    closeStarted,
+    replacementStarted,
+    transportStopped,
     request,
     snapshots,
     changeVoice: () => {
@@ -96,33 +108,37 @@ function fixture() {
   };
 }
 
-async function settleLocalRequests() {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
-}
-
 describe("browser voice handoff history", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", createStorageMock());
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     transports.contexts.length = 0;
-    transports.stop.mockClear();
+    transports.stop.mockReset();
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it.each(["none", "transcript", "provider-close"])(
     "drains finalized speech before replacement and honors Stop during %s",
     async (stopDuring) => {
       const f = fixture();
+      let original = f.state.realtimeTalkSession;
       try {
         await f.state.toggleRealtimeTalk();
-        transports.contexts[0]!.callbacks.onTranscript?.({
+        original = expectDefined(f.state.realtimeTalkSession, "initial realtime session");
+        expectDefined(
+          transports.contexts[0],
+          "initial realtime transport",
+        ).callbacks.onTranscript?.({
           role: "user",
           text: "Remember the blue bicycle.",
           final: true,
         });
         f.changeVoice();
-        await settleLocalRequests();
+        await f.transportStopped.promise;
         expect(transports.stop).toHaveBeenCalledOnce();
         expect(f.snapshots).toEqual([[]]);
         expect(f.state.realtimeTalkSession).toBeNull();
@@ -132,18 +148,17 @@ describe("browser voice handoff history", () => {
           expect(f.state.realtimeTalkActive).toBe(false);
         }
         f.transcript.resolve();
-        await vi.waitFor(() =>
-          expect(f.request.mock.calls.some(([method]) => method === "talk.client.close")).toBe(
-            true,
-          ),
-        );
+        await f.closeStarted.promise;
         expect(f.snapshots).toHaveLength(1);
         if (stopDuring === "provider-close") {
           await f.state.toggleRealtimeTalk();
           expect(f.state.realtimeTalkActive).toBe(false);
         }
         f.close.resolve();
-        await settleLocalRequests();
+        await original.stop();
+        if (stopDuring === "none") {
+          await f.replacementStarted.promise;
+        }
         expect(f.snapshots).toEqual(
           stopDuring === "none"
             ? [[], ["Remember the blue bicycle.", "Provider final speech"]]
@@ -157,8 +172,10 @@ describe("browser voice handoff history", () => {
       } finally {
         f.transcript.resolve();
         f.close.resolve();
+        const active = f.state.realtimeTalkSession;
         stopChatRealtimeTalk(f.state);
-        await settleLocalRequests();
+        await original?.stop();
+        await active?.stop();
       }
     },
   );

@@ -12,7 +12,7 @@ import {
   createContext,
   createRuntimeConfigStub,
 } from "../../skill-workshop/skill-workshop-page.test-support.ts";
-import { createTestTranscript, renderChatView } from "../chat-view.test-helpers.ts";
+import { createTestTranscript, renderChatInto, renderChatView } from "../chat-view.test-helpers.ts";
 import {
   MessageActions,
   prepareChatMessageRender,
@@ -134,7 +134,7 @@ it("keeps speech through Gateway notifications that preserve connection and text
   expect(revoke).toHaveBeenCalledWith("blob:synthetic-speech");
 });
 
-it("reads replies rendered through the Lit pane's native transcript", async () => {
+it("keeps native transcript speech with its current application context", async () => {
   installTranscriptDomMocks();
   const speechStarted = createDeferred();
   play.mockImplementation(async function (this: HTMLAudioElement) {
@@ -142,11 +142,12 @@ it("reads replies rendered through the Lit pane's native transcript", async () =
       speechStarted.resolve();
     }
   });
-  const request = vi.fn(async () => ({
+  const synthesize = async () => ({
     audioBase64: "UklGRg==",
     mimeType: "audio/wav",
     provider: "openai",
-  }));
+  });
+  const request = vi.fn(synthesize);
   const stub = createRuntimeConfigStub();
   const runtimeConfig = {
     ...stub,
@@ -161,11 +162,14 @@ it("reads replies rendered through the Lit pane's native transcript", async () =
   };
   const context = createContext(request, { methods: ["tts.speak"], runtimeConfig });
   const transcript = createTestTranscript();
-  const container = renderChatView({
+  const messages = [{ role: "assistant", content: "Local voice is working." }];
+  const props = {
     applicationContext: context,
     transcript,
-    messages: [{ role: "assistant", content: "Local voice is working." }],
-  });
+    messages,
+  };
+  const container = renderChatView(props);
+  const thread = container.querySelector(".chat-thread-inner");
   const button = expectDefined(
     container.querySelector<HTMLButtonElement>('[aria-label="Read aloud"]'),
     "configured Read aloud action in the native transcript",
@@ -174,6 +178,23 @@ it("reads replies rendered through the Lit pane's native transcript", async () =
   await speechStarted.promise;
   expect(play).toHaveBeenCalledTimes(2);
   expect(request).toHaveBeenCalledWith("tts.speak", { text: "Local voice is working." });
+  renderChatInto(container, props);
+  expect(container.querySelector('[aria-label="Stop reading"]')).toBe(button);
+  expect(revoke).not.toHaveBeenCalled();
+
+  const replacementRequest = vi.fn(synthesize);
+  renderChatInto(container, {
+    ...props,
+    applicationContext: createContext(replacementRequest, {
+      methods: ["tts.speak"],
+      runtimeConfig,
+    }),
+  });
+  expect(container.querySelector(".chat-thread-inner")).toBe(thread);
+  expect(revoke).toHaveBeenCalledWith("blob:synthetic-speech");
+  expectDefined(container.querySelector<HTMLButtonElement>('[aria-label="Read aloud"]')).click();
+  await waitForSolid(() => expect(replacementRequest).toHaveBeenCalledOnce());
+  expect(request).toHaveBeenCalledOnce();
   transcript.hostDisconnected();
   render(nothing, container);
   // Retained transcript roots retire after the pane disconnection microtask.

@@ -39,7 +39,11 @@ import {
 } from "./chat-transcript-offset-observer.ts";
 import { activeTranscriptMessageId } from "./chat-transcript-position.ts";
 import { TranscriptPrependAnchor } from "./chat-transcript-prepend-anchor.ts";
-import { previewTranscriptRowKeys, focusedTranscriptRowKey } from "./chat-transcript-range.ts";
+import {
+  focusedTranscriptRowKey,
+  leavingTranscriptMcpAppRows,
+  previewTranscriptRowKeys,
+} from "./chat-transcript-range.ts";
 import { TranscriptRowRefs } from "./chat-transcript-row-refs.ts";
 import {
   applyPendingScrollOffset,
@@ -527,20 +531,12 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
             this.offsetState.scrollCommand?.target === "index",
         });
       },
-      () => {
-        const appRows = new Set(
-          [
-            ...(this.threadInnerElement?.querySelectorAll<HTMLElement>("mcp-app-view") ?? []),
-          ].flatMap((app) => app.closest<HTMLElement>(".chat-virtual-row") ?? []),
-        );
-        if (appRows.size === 0) {
-          return [];
-        }
-        const nextRenderedKeys = rowModelChanged
-          ? previewTranscriptRowKeys(virtualizer, nextKeys, this.focusedRowKey)
-          : new Set(nextRowKeys);
-        return [...appRows].filter((row) => !nextRenderedKeys.has(row.dataset.virtualRowKey ?? ""));
-      },
+      () =>
+        leavingTranscriptMcpAppRows(this.threadInnerElement, () =>
+          rowModelChanged
+            ? previewTranscriptRowKeys(virtualizer, nextKeys, this.focusedRowKey)
+            : new Set(nextRowKeys),
+        ),
       {
         afterCommit: (effect) => {
           this.renderer.afterCommit(effect);

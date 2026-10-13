@@ -288,9 +288,9 @@ export class ChatTranscriptRenderer {
           );
           // Keep the session root independent while retaining its application capabilities.
           return (
-            <Show when={snapshot().applicationContext} fallback={content()}>
+            <Show when={snapshot().applicationContext} fallback={content()} keyed>
               {(application) => (
-                <ApplicationProvider value={application()}>{content()}</ApplicationProvider>
+                <ApplicationProvider value={application}>{content()}</ApplicationProvider>
               )}
             </Show>
           );
