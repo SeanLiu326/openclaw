@@ -102,14 +102,14 @@ export function prepareSessionConversationForWrite(params: {
   previousEntry?: SessionEntry | null;
   canonicalPreviousEntry?: SessionEntry;
   previousWindow?: SessionEntryWindowRow | null;
-  allowStoredAliases?: boolean;
+  observeConversation?: boolean;
   routeContext?: ConversationRouteContext | null;
   sessionScope: string;
 }): { conversation: PreparedSessionConversation | null; primaryConversationId: string | null } {
   // Bookkeeping is not a new route observation. Its committed association owns
   // the canonical peer and route context until a route or lifecycle changes.
   if (
-    !params.allowStoredAliases &&
+    !params.observeConversation &&
     params.routeContext === undefined &&
     params.canonicalPreviousEntry?.sessionId === params.entry.sessionId &&
     params.canonicalPreviousEntry.lifecycleRevision === params.entry.lifecycleRevision &&

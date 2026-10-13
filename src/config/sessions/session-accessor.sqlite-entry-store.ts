@@ -350,6 +350,7 @@ export function writeSessionEntry(
     consumePendingReset?: boolean;
     preserveNodeSuggestions?: boolean;
     previousEntry?: SessionEntry | null;
+    observeConversation?: boolean;
     routeContext?: ConversationRouteContext | null;
   } = {},
 ): SessionEntry {
@@ -574,7 +575,7 @@ export function writeSessionEntry(
         previousEntry,
         canonicalPreviousEntry,
         previousWindow: actor?.window ?? preparedWindow?.row,
-        allowStoredAliases: options.allowStoredAliases,
+        observeConversation: options.observeConversation || options.allowStoredAliases,
         ...(options.routeContext !== undefined ? { routeContext: options.routeContext } : {}),
         sessionScope: boundSessionRoot.session_scope,
       });

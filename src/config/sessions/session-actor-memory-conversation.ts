@@ -50,12 +50,14 @@ export function syncSessionActorMemoryConversations(
   shared: SessionActorMemoryConversationOwner,
   previousEntry?: SessionEntry,
   observedContext?: ConversationRouteContext | null,
+  observeConversation = false,
 ): void {
   const entry = state.hot.entry;
   if (!entry) {
     return;
   }
   if (
+    !observeConversation &&
     observedContext === undefined &&
     previousEntry?.sessionId === entry.sessionId &&
     previousEntry.lifecycleRevision === entry.lifecycleRevision &&

@@ -290,14 +290,33 @@ describe("conversation registry", () => {
       },
     });
 
+    const resumedSnapshot = await loadReplySessionInitializationSnapshot(scope);
+    expect(
+      await commitReplySessionInitialization({
+        activeSessionKey: sessionKey,
+        agentId: "main",
+        expectedRevision: resumedSnapshot.revision,
+        sessionEntry: {
+          ...resumedSnapshot.currentEntry!,
+          updatedAt: canonicalConversation!.lastSeenAt + 100,
+        },
+        sessionKey,
+        snapshotEntry: resumedSnapshot.currentEntry,
+        storePath,
+      }),
+    ).toMatchObject({ ok: true });
+    const resumed = await readConversation(scope, conversationRef);
+    expect(resumed!.lastSeenAt).toBeGreaterThan(canonicalConversation!.lastSeenAt);
+    expect(resumed).toEqual({ ...canonicalConversation, lastSeenAt: resumed!.lastSeenAt });
+
     await upsertCanonicalSessionEntry(scope, {
       totalTokens: 42,
-      updatedAt: canonicalConversation!.lastSeenAt + 100,
+      updatedAt: resumed!.lastSeenAt + 100,
     });
-    expect(await readConversation(scope, conversationRef)).toEqual(canonicalConversation);
+    expect(await readConversation(scope, conversationRef)).toEqual(resumed);
     expect(
       await resolveCurrentSessionPrimaryConversation({ ...scope, sessionId: "ops-session" }),
-    ).toEqual(canonicalConversation);
+    ).toEqual(resumed);
 
     const observedSnapshot = await loadReplySessionInitializationSnapshot(scope);
     expect(
@@ -314,7 +333,7 @@ describe("conversation registry", () => {
     ).toMatchObject({ ok: true });
     const observed = await readConversation(scope, conversationRef);
     expect(observed).toMatchObject({ routeContext: { guildId: "guild-b" } });
-    expect(observed!.lastSeenAt).toBeGreaterThan(canonicalConversation!.lastSeenAt);
+    expect(observed!.lastSeenAt).toBeGreaterThan(resumed!.lastSeenAt);
 
     await upsertCanonicalSessionEntry(scope, { label: "generic current write", updatedAt: 200 });
     expect(
