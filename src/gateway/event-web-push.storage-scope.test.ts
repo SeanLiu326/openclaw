@@ -65,9 +65,12 @@ vi.mock("../infra/device-pairing-worker.js", () => ({
   withCurrentDevicePairingSnapshot: async <T>(
     _stateDir: string | undefined,
     prepare: (paired: PairedDevice[]) => { start: () => T } | undefined,
+    preparePublication?: () => Promise<void>,
   ) => {
     const read = mocks.listPairedDevices();
-    return prepare(read instanceof Promise ? await read : read)?.start();
+    const paired = read instanceof Promise ? await read : read;
+    await preparePublication?.();
+    return prepare(paired)?.start();
   },
 }));
 vi.mock("../infra/device-pairing.js", () => ({
@@ -306,6 +309,7 @@ it("keeps browser storage responsive while notification session facts load", asy
     entered.resolve();
     await release.promise;
     return {
+      prepareRead: () => undefined,
       readCurrent: () => ({ target: null, membership: new Set<string>() }),
       release: factsReleased,
     };

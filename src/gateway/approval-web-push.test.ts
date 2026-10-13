@@ -34,7 +34,12 @@ vi.mock("../infra/device-pairing-worker.js", async (importOriginal) => ({
     prepare: (
       paired: import("../infra/device-pairing.types.js").PairedDevice[],
     ) => { start: () => T } | undefined,
-  ) => prepare(listDevicePairingMock().paired)?.start(),
+    preparePublication?: () => Promise<void>,
+  ) => {
+    const paired = listDevicePairingMock().paired;
+    await preparePublication?.();
+    return prepare(paired)?.start();
+  },
 }));
 
 vi.mock("../infra/push-web.js", () => ({
@@ -65,6 +70,7 @@ vi.mock("../state/user-preferences.js", async (importOriginal) => ({
 
 vi.mock("./session-sharing-preparation.js", () => ({
   prepareSessionMutationFacts: async () => ({
+    prepareRead: () => undefined,
     readCurrent: () => ({ target: null, membership: new Set<string>() }),
     release: () => {},
   }),
