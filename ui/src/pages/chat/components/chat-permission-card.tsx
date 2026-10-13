@@ -66,7 +66,7 @@ function ChatPermissionCard(props: {
         "not-determined",
       ] as const) {
         const capabilities = remaining().filter((id) => {
-          const entry = snapshot?.permissions.entries.find((entry) => entry.id === id);
+          const entry = snapshot?.permissions.entries.find((candidate) => candidate.id === id);
           return (
             entry?.state === candidateState ||
             (candidateState === "denied" && entry?.status === "denied") ||
