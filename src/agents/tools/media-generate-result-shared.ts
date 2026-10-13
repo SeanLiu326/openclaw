@@ -16,6 +16,10 @@ import {
   type AgentGeneratedAttachment,
 } from "../generated-attachments.js";
 import { isMediaGenerationOperationCurrent } from "../media-generation-activity.js";
+import {
+  readCurrentMediaGenerationRequester,
+  type MediaGenerationTaskHandle,
+} from "./media-generate-background-completion.js";
 import type { MediaGenerationExecutionResult } from "./media-generate-background-shared.js";
 import type { MediaToolSandbox } from "./media-tool-shared.js";
 
@@ -58,7 +62,7 @@ export async function buildMediaGenerateToolExecutionResult(params: {
   sandbox?: AcquireGeneratedMediaSandbox;
   maxBytes: number;
   messages?: Array<string | null>;
-  taskHandle?: { taskId: string; runId: string } | null;
+  taskHandle?: MediaGenerationTaskHandle | null;
   details: Record<string, unknown>;
 }): Promise<MediaGenerateToolExecutionResult> {
   const { result, attachments, mediaUrls } = params;
@@ -71,17 +75,33 @@ export async function buildMediaGenerateToolExecutionResult(params: {
       throw new Error("Media generation task is no longer active");
     }
   };
+  const assertStagingCurrent = async () => {
+    assertCurrent();
+    const handle = params.taskHandle;
+    if (
+      handle &&
+      (handle.detach || handle.requesterTranscript) &&
+      !(await readCurrentMediaGenerationRequester(handle))
+    ) {
+      throw new Error("The requesting session is no longer current");
+    }
+    assertCurrent();
+  };
   const reportStagingFailure = (error: unknown) => {
     stagingMessages.push(
       `Sandbox copy unavailable: ${sanitizeGeneratedMediaDisplayText(String(error))}`,
     );
   };
-  using sandbox = attachments.some((attachment) => attachment.path)
-    ? await params.sandbox?.(assertCurrent).catch((error: unknown) => {
-        reportStagingFailure(error);
-        return null;
-      })
-    : undefined;
+  const acquireSandbox = params.sandbox;
+  using sandbox =
+    acquireSandbox && attachments.some((attachment) => attachment.path)
+      ? await assertStagingCurrent()
+          .then(() => acquireSandbox(assertCurrent))
+          .catch((error: unknown) => {
+            reportStagingFailure(error);
+            return null;
+          })
+      : undefined;
   if (sandbox) {
     const { root, bridge } = sandbox;
     const directory = stagedInputDirectory(randomUUID());
@@ -99,7 +119,7 @@ export async function buildMediaGenerateToolExecutionResult(params: {
           throw new Error("Sandbox does not support exclusive media staging");
         }
         if (!ready) {
-          assertCurrent();
+          await assertStagingCurrent();
           const created = await bridge.createFileExclusive({
             filePath: `${directory}/.gitignore`,
             cwd: root,
@@ -111,7 +131,7 @@ export async function buildMediaGenerateToolExecutionResult(params: {
           ready = true;
         }
         const filePath = `${directory}/${path.basename(attachment.path)}`;
-        assertCurrent();
+        await assertStagingCurrent();
         const created = await bridge.createFileExclusive({ filePath, cwd: root, data: buffer });
         if (created !== "created") {
           throw new Error("Media staging file already exists");

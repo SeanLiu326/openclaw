@@ -98,7 +98,8 @@ delivery still uses the managed original. Each copy is limited to the smaller
 of the configured media size limit and 50 MiB. Remote-only video URLs are not
 downloaded for staging. If the workspace is read-only or staging fails, the
 result reports that the sandbox copy is unavailable; generation and delivery
-still succeed.
+still succeed. Resetting or deleting the requesting session stops further sandbox
+copies and prevents completion delivery to a replacement session.
 
 <Note>
 **Skills**: the `read` tool is sandbox-rooted. With `workspaceAccess: "none"`, OpenClaw mirrors eligible skills into the sandbox workspace (`.../skills`) as read-only instruction roots; other private workspace files remain writable. With `"rw"`, workspace skills are readable from `/workspace/skills`, and eligible managed, bundled, or plugin skills are materialized into the generated read-only path `/workspace/.openclaw/sandbox-skills/skills`.
