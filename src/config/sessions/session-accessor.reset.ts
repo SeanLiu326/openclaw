@@ -173,11 +173,15 @@ async function loadReplySessionInitializationEntriesAsync(
   });
 }
 
-function captureReplySessionInitializationSource(params: ReplySessionInitializationSelection) {
+function captureReplySessionInitializationSource(
+  params: ReplySessionInitializationSelection & { databaseSource?: DatabasePathIdentity },
+) {
   const captured = captureLifecycleDatabaseScope(resolveSqliteScope(params));
-  const source = supportsOpenClawAgentDatabaseExecution(toDatabaseOptions(captured))
-    ? readDatabasePathIdentitySync(captured.path)
-    : undefined;
+  const source =
+    params.databaseSource ??
+    (supportsOpenClawAgentDatabaseExecution(toDatabaseOptions(captured))
+      ? readDatabasePathIdentitySync(captured.path)
+      : undefined);
   const database = { ...toDatabaseOptions(captured), path: source?.canonicalPath ?? captured.path };
   const assertSourceCurrent = (creating = false) => {
     if (!source) {
@@ -206,6 +210,7 @@ export async function loadReplySessionInitializationSnapshot(
   } = {},
 ): Promise<
   ReplySessionInitializationSnapshot & {
+    databaseSource?: DatabasePathIdentity;
     lifecycleTimestamps?: SessionLifecycleTimestamps;
     coldArchives?: Array<Omit<SessionColdArchive, "archive_blob">>;
   }
@@ -215,6 +220,7 @@ export async function loadReplySessionInitializationSnapshot(
   assertCurrent();
   const storePath = resolveSessionStorePathForScope(params);
   let store: Record<string, SessionEntry>;
+  let databaseSource: DatabasePathIdentity | undefined;
   let lifecycleTimestamps: SessionLifecycleTimestamps | undefined;
   let coldArchives: Array<Omit<SessionColdArchive, "archive_blob">> | undefined;
   if (reader) {
@@ -246,6 +252,7 @@ export async function loadReplySessionInitializationSnapshot(
       ...params,
       storePath,
     });
+    databaseSource = source;
     store = await loadReplySessionInitializationEntriesAsync(
       { ...params, storePath },
       database,
@@ -262,6 +269,7 @@ export async function loadReplySessionInitializationSnapshot(
       return entry ? { ...entry } : undefined;
     },
     revision: createReplySessionInitializationRevision(currentEntry),
+    ...(databaseSource ? { databaseSource } : {}),
     ...(lifecycleTimestamps ? { lifecycleTimestamps } : {}),
     ...(coldArchives ? { coldArchives } : {}),
   };
@@ -280,6 +288,8 @@ function createStaleReplySessionInitializationResult(
 
 /** Persists one reply-session initialization result with its in-place reset boundary. */
 export async function commitReplySessionInitialization(params: {
+  /** Keep an authorized creation bound to the database read by its snapshot. */
+  databaseSource?: DatabasePathIdentity;
   bindCreation?: (operation: SessionEntryCreationOperation) => () => void;
   onCreated?: (created: SessionEntryCreationCommit) => void;
   commitGuard?: () => void;
