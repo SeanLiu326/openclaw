@@ -1,7 +1,8 @@
 import type { RouteLocation } from "@openclaw/uirouter";
 import { definePage, redirect } from "@openclaw/uirouter";
-import { html, nothing } from "lit";
+import { createComponent } from "solid-js";
 import { pathForRoute, routePageSpec, type RouteId } from "../../app-route-paths.ts";
+import type { SolidRouteProps } from "../../app-route-types.ts";
 import type { ApplicationContext } from "../../app/context.ts";
 import { isNativeEmbedHost } from "../../app/native-web-chrome.ts";
 import { CONFIG_PAGE_IDS, type ConfigPageId } from "./config-sections.ts";
@@ -82,11 +83,15 @@ function configPage(id: ConfigPageId) {
     },
     loader: (context: ApplicationContext, { location }) => loadConfigRoute(context, location, id),
     component: () =>
-      import("./config-page.tsx").then(() => ({
+      import("./config-page.tsx").then((module) => ({
         header: true,
-        render: (data: ConfigRouteData | undefined) => html`
-          <openclaw-config-page .pageId=${id} .routeData=${data ?? null}></openclaw-config-page>
-        `,
+        renderSolid: (props: SolidRouteProps<ConfigRouteData>) =>
+          createComponent(module.ConfigPage, {
+            pageId: id,
+            get routeData() {
+              return props.data ?? null;
+            },
+          }),
       })),
   });
 }
@@ -107,7 +112,7 @@ const removedGeneralRedirectPage = definePage({
     });
   },
   // Redirect routes still require a module by contract, but never render page content.
-  component: async () => ({ header: true, render: () => nothing }),
+  component: async () => ({ header: true, renderSolid: () => null }),
 });
 
 export const pages = [
@@ -118,7 +123,7 @@ export const pages = [
         ? undefined
         : redirect({ ...location, pathname: pathForRoute("chat", context.basePath) }),
     // The shell reuses its lazy settings navigation as the embedded list page.
-    component: async () => ({ render: () => nothing }),
+    component: async () => ({ renderSolid: () => null }),
   }),
   removedGeneralRedirectPage,
   ...CONFIG_PAGE_IDS.map(configPage),
