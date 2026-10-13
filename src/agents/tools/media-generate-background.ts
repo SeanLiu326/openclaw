@@ -51,6 +51,7 @@ export type MediaGenerateToolOptions = {
   authProfileStoreSource?: boolean;
   agentSessionKey?: string;
   sandboxSessionKey?: string;
+  sandboxAgentId?: string;
   /** Durable requester transcript key; task ownership stays on agentSessionKey. */
   requesterRunSessionKey?: string;
   requesterAgentId?: string;
@@ -122,7 +123,7 @@ export function resolveMediaGenerateToolContext<K extends keyof typeof GENERATIO
         const sandbox = await resolveSandboxContext({
           config: cfg,
           sessionKey: sandboxSessionKey,
-          agentId: options?.requesterAgentId,
+          agentId: options?.sandboxAgentId,
           workspaceDir: options?.spawnWorkspaceDir ?? options?.workspaceDir,
           skillsSnapshot: options?.skillsSnapshot,
           execOverrides: options?.execOverrides,
