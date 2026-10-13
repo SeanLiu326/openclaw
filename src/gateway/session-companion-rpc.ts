@@ -20,8 +20,8 @@ import { SessionMutationAuthorizationChangedError } from "./session-mutation-aut
 import { captureSessionSharingMemoryFacts } from "./session-sharing-incognito.js";
 import {
   hiddenSessionNotFound,
-  withSessionSharingTarget,
   type PreparedSessionMutationFacts,
+  type SessionSharingTarget,
 } from "./session-sharing-policy.js";
 import { prepareSessionMutationFacts } from "./session-sharing-preparation.js";
 import {
@@ -31,6 +31,8 @@ import {
 } from "./session-sharing-read.js";
 import { prepareSessionSharingSource } from "./session-sharing-source.js";
 import { resolveRequestedSessionStoreTarget } from "./session-store-key.js";
+import { withGatewaySessionStoreTarget } from "./session-utils-store-lookup.js";
+import { findCanonicalStoreMatch } from "./session-utils-store-selection.js";
 import { captureGatewayClientUploadCommitGuard } from "./upload-policy.js";
 
 function resolveCompanionTarget(
@@ -59,7 +61,10 @@ function resolveCompanionTarget(
 function companionTargetIsVisible(
   client: Parameters<GatewayRequestHandlers[string]>[0]["client"],
   context: Parameters<GatewayRequestHandlers[string]>[0]["context"],
-  prepared: PreparedSessionMutationFacts & { profiles: PreparedSessionSharingProfiles },
+  prepared: {
+    target: Pick<SessionSharingTarget, "storeKey" | "entry"> | null;
+    profiles: PreparedSessionSharingProfiles;
+  },
 ): boolean {
   if (client?.connId && context.isConnectionActive?.(client.connId) === false) {
     return false;
@@ -73,7 +78,7 @@ function companionTargetIsVisible(
     client,
     cfg,
     profiles: prepared.profiles,
-    isMember: (_target, id) => prepared.membership.has(id),
+    isMember: () => false,
   });
   return sharing.entryFilter?.(sharingTarget.storeKey, sharingTarget.entry) !== false;
 }
@@ -316,18 +321,19 @@ export const sessionCompanionHandlers: GatewayRequestHandlers = {
         return;
       }
       const profiles = await prepareSessionSharingProfiles(client);
-      await withSessionSharingTarget(
+      await withGatewaySessionStoreTarget(
         {
           cfg: context.getRuntimeConfig(),
-          sessionKey: target.sessionKey,
+          key: target.sessionKey,
           agentId: target.agentId,
+          projection: "list",
         },
-        ({ target: sharingTarget, members, assertCurrent }) => {
+        (selected, _members, assertCurrent) => {
           assertCurrent();
+          const match = findCanonicalStoreMatch(selected.store, selected.storeKeys);
           if (
             !companionTargetIsVisible(client, context, {
-              target: sharingTarget,
-              membership: new Set(members.map((member) => member.identityId)),
+              target: match ? { storeKey: match.key, entry: match.entry } : null,
               profiles,
             })
           ) {

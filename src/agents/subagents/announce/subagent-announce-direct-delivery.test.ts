@@ -433,7 +433,7 @@ describe("late exact requester recovery", () => {
     },
     {
       name: "permanent failure",
-      error: new Error("unsupported channel: fixture"),
+      error: Object.assign(new Error("unsupported channel: fixture"), { code: "UNSUPPORTED" }),
       delivered: false,
       disposition: "permanent_failure",
     },
@@ -453,6 +453,8 @@ describe("late exact requester recovery", () => {
     },
   ])("preserves the original $name", async (outcome) => {
     const fixture = setup();
+    const onDeliveryError = vi.fn();
+    fixture.params.onDeliveryError = onDeliveryError;
     const delivery = fixture.startDelivery();
     await fixture.dispatchEntered.promise;
     fixture.state.entry = { ...fixture.state.entry, ...finalReceipt };
@@ -465,6 +467,12 @@ describe("late exact requester recovery", () => {
     const result = await delivery;
     expect(result.delivered).toBe(outcome.delivered);
     expect(result.disposition).toBe(outcome.disposition);
+    if ("error" in outcome && outcome.error) {
+      expect(onDeliveryError).toHaveBeenCalledWith(outcome.error);
+      expect(result.error).toBe(outcome.error.message);
+    } else {
+      expect(onDeliveryError).not.toHaveBeenCalled();
+    }
     expect(fixture.read).not.toHaveBeenCalled();
     expect(fixture.dispatch).toHaveBeenCalledOnce();
     expect(fixture.send).not.toHaveBeenCalled();

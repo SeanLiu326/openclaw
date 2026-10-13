@@ -304,6 +304,7 @@ async function selectedSession(
     }
   }
   const identity = resolveSessionStoreIdentity({ cfg: sourceCfg, sessionKey });
+  const profiles = await prepareSessionSharingProfiles(options.client);
   let active = true;
   const actorFacts = captureSessionSharingMemoryFacts(
     {
@@ -337,7 +338,17 @@ async function selectedSession(
       throw new SkillLibraryError("NOT_FOUND", "Session not found.");
     }
     if (authorize) {
-      const error = authorizeSessionSharingTarget({ cfg, client: options.client, target });
+      const sharing =
+        actorFacts &&
+        prepareProjectedSessionSharing({
+          cfg,
+          client: options.client,
+          profiles,
+          isMember: (_target, id) => actorFacts.readCurrent().membership.has(id),
+        });
+      const error = sharing
+        ? sharing.authorizeTarget(target)
+        : authorizeSessionSharingTarget({ cfg, client: options.client, target });
       if (error) {
         throw new SessionMutationAuthorizationChangedError(error);
       }

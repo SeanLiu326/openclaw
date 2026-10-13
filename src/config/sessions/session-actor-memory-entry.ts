@@ -125,18 +125,20 @@ export function executeSessionActorMemoryEntryCommand(
     key: string,
     entry: SessionEntry,
     options?: Parameters<typeof installSessionActorMemoryEntry>[2] & {
+      observeConversation?: boolean;
       routeContext?: ConversationRouteContext | null;
     },
   ) => {
     const target = context.edit(key);
     const previous = target.hot.entry;
     const installed = installSessionActorMemoryEntry(target, entry, options);
-    if (options?.routeContext !== undefined) {
+    if (options?.observeConversation || options?.routeContext !== undefined) {
       syncSessionActorMemoryConversations(
         target,
         context.editConversations(),
         previous,
         options.routeContext,
+        options.observeConversation,
       );
     }
     return installed;
@@ -318,6 +320,7 @@ export function executeSessionActorMemoryEntryCommand(
         clearSessionActorProgressCardForReset(state);
       const nextEntry = install(sessionKey, input.nextEntry, {
         consumePendingReset: true,
+        observeConversation: true,
         routeContext: input.routeContext,
       });
       for (const replacement of input.relatedReplacements ?? []) {

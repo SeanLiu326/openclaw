@@ -19,7 +19,7 @@ import {
   recordSessionParticipantInWorker,
   removeSessionMemberInWorker,
 } from "./session-sharing-store.async.js";
-import { isSessionMember, readSessionMembersInWorker } from "./session-sharing-store.js";
+import { readSessionMembersInWorker } from "./session-sharing-store.js";
 import { listSessionSuggestions } from "./session-suggestion-store.read.js";
 import type { SessionEntry } from "./types.js";
 
@@ -154,7 +154,9 @@ describe("memory collaboration through the public adapters", () => {
         addedAt: 10,
       });
       expect(grant.inserted).toBe(true);
-      expect(isSessionMember(scope, "viewer")).toBe(true);
+      expect((await readSessionMembersInWorker(scope)).members).toEqual([
+        { identityId: "viewer", addedBy: "owner", addedAt: 10 },
+      ]);
       await removeSessionMemberInWorker(scope, "viewer", grant.member);
       await addSessionMemberInWorker(scope, {
         identityId: "viewer",

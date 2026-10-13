@@ -232,10 +232,6 @@ export function createAgentDatabaseExecution(
         },
         expectedIdentity ?? fileIdentity,
         acceptFileIdentity,
-        () => {
-          const retained = owner.borrow(pathname);
-          return () => retained.release();
-        },
         fileIdentity ? undefined : (creationIdentity ?? creatingTarget),
         creationClaim?.witness,
       );

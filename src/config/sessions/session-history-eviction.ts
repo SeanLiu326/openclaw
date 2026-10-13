@@ -440,6 +440,7 @@ async function enforceSessionHistoryMaintenanceForDatabase(
   let pruning = await pruneArchives("initial");
   let { usage, removedFiles } = pruning;
   let removedEntries = 0;
+  let deletedSessionEntries = 0;
   const finish = () =>
     createPhysicalBudgetResult({
       totalBytesBefore: initialUsage.totalBytes,
@@ -632,6 +633,7 @@ async function enforceSessionHistoryMaintenanceForDatabase(
           continue;
         }
         removedEntries += 1;
+        deletedSessionEntries += 1;
         const pageDiagnostics: SqliteSessionArchivePruningDiagnostics = {
           trigger: "after-eviction",
         };
@@ -672,7 +674,9 @@ async function enforceSessionHistoryMaintenanceForDatabase(
     }
   }
   if (removedEntries > 0) {
-    await refreshSqliteSessionPlannerStatisticsBestEffort(resolved, removedEntries);
+    // Historical generations do not change entry cardinality. Whole-database
+    // analysis after their eviction stalls foreground writers on large stores.
+    await refreshSqliteSessionPlannerStatisticsBestEffort(resolved, deletedSessionEntries);
     usage = await measureSessionPhysicalDiskUsage(params.storePath);
   }
 

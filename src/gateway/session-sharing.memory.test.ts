@@ -5,10 +5,7 @@ import {
   runWithSessionActorStorage,
   type SessionActorStorageBinding,
 } from "../config/sessions/session-actor-storage-binding.js";
-import {
-  isSessionMember,
-  readSessionMembersInWorker,
-} from "../config/sessions/session-sharing-store.js";
+import { readSessionMembersInWorker } from "../config/sessions/session-sharing-store.js";
 import { prepareSessionSourceAuthority } from "../config/sessions/session-source-authority.js";
 import { createGatewayRequestContext } from "./server-request-context.js";
 import { makeContextParams } from "./server-request-context.test-support.js";
@@ -156,7 +153,6 @@ it("reads unbound sibling sharing from the captured owner", async () => {
         authority,
       ),
     ).toMatchObject({ kind: "committed" });
-    expect(isSessionMember(scope, "sibling-reader")).toBe(true);
     expect((await readSessionMembersInWorker(scope)).members).toEqual([
       { identityId: "sibling-reader", addedBy: "owner", addedAt: 1 },
     ]);
@@ -164,7 +160,6 @@ it("reads unbound sibling sharing from the captured owner", async () => {
       { type: "session.collaboration.remove", input: { identityId: "sibling-reader" } },
       authority,
     );
-    expect(isSessionMember(scope, "sibling-reader")).toBe(false);
     expect((await readSessionMembersInWorker(scope)).members).toEqual([]);
     expect(
       await readSessionMembersInWorker({

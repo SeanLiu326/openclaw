@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { describePendingFakeTimers } from "../../test/helpers/fake-timer-diagnostics.js";
 import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
+import { resolveAgentDir } from "../agents/agent-scope-config.js";
 import { setLoggerOverride } from "../logging/logger.js";
 import { loggingState } from "../logging/state.js";
 import { AsyncWorkScope } from "../shared/async-work-scope.js";
@@ -59,6 +60,8 @@ describe("session cost usage refresh", () => {
         return Promise.resolve("refreshed");
       });
 
+      // Process-owned directory observation must not borrow the refresh test's clock.
+      resolveAgentDir(config, params.agentId);
       vi.useFakeTimers();
       try {
         expect(await loadCostUsageSummaryFromCache(params)).toMatchObject({
@@ -145,6 +148,7 @@ describe("session cost usage refresh", () => {
       ),
     );
     await withEnvAsync({ OPENCLAW_STATE_DIR: root }, async () => {
+      resolveAgentDir(config, agentId);
       vi.useFakeTimers();
       try {
         await run({ agentId, sessionFiles });
