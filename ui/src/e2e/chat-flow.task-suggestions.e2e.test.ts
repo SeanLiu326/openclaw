@@ -445,15 +445,18 @@ suite.define(() => {
         expect(
           await summary.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
         ).toBe(true);
-        expect(
-          await summary.evaluate((element) => {
-            element.scrollTop = element.scrollHeight;
-            return (
-              element.scrollTop > 0 &&
-              element.scrollTop + element.clientHeight >= element.scrollHeight - 1
-            );
-          }),
-        ).toBe(true);
+        await expect
+          .poll(() =>
+            summary.evaluate((element, text) => {
+              element.scrollTop = element.scrollHeight;
+              return (
+                element.textContent === text &&
+                element.scrollTop > 0 &&
+                element.scrollTop + element.clientHeight >= element.scrollHeight - 1
+              );
+            }, verboseSuggestion.tldr),
+          )
+          .toBe(true);
 
         const card = tray.locator(".task-suggestion:visible");
         await card.getByText("Show instructions", { exact: true }).click();
