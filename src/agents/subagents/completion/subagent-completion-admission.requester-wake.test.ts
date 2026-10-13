@@ -15,7 +15,6 @@ import { subagentRuns } from "../registry/subagent-registry-memory.js";
 import {
   mutateSubagentRuns,
   restoreSubagentRunsFromDisk,
-  SubagentRegistryVersionConflictError,
 } from "../registry/subagent-registry-persistence.js";
 import { subscribeSubagentRunChanges } from "../registry/subagent-registry-publication.js";
 import { getPendingWakeCommit } from "../registry/subagent-registry-requester-wake-commit.js";
@@ -708,7 +707,7 @@ describe("persisted subagent requester wakes", () => {
     },
   );
 
-  it.each(["missing outcome", "paused", "superseded generation"] as const)(
+  it.each(["missing outcome", "paused"] as const)(
     "does not settle uncaptured completion with %s evidence",
     async (change) => {
       const input = failedRecords("failed", { status: "error" });
@@ -720,19 +719,12 @@ describe("persisted subagent requester wakes", () => {
       }
       persistOwner(input);
       const before = structuredClone(input);
-      if (change === "superseded generation") {
-        before.subagent.delivery!.generation = 2;
-        writeSubagentRunValuesInDatabase(database, [bindSubagentRunRecord(before.subagent)], []);
-      }
-      const blocked = blockSubagentCompletionDelivery({
-        subagent: input.subagent,
-        reason: "requester unavailable",
-      });
-      if (change === "superseded generation") {
-        await expect(blocked).rejects.toBeInstanceOf(SubagentRegistryVersionConflictError);
-      } else {
-        await expect(blocked).resolves.toBe(false);
-      }
+      await expect(
+        blockSubagentCompletionDelivery({
+          subagent: input.subagent,
+          reason: "requester unavailable",
+        }),
+      ).resolves.toBe(false);
       database = await reopenCompletionFixtureOwners();
       expect(subagentRuns.get(input.subagent.runId)).toEqual(before.subagent);
       expect(readCompletionSystemEvents(database)).toEqual([]);

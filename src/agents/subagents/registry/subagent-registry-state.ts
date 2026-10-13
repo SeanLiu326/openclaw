@@ -40,6 +40,7 @@ import {
 } from "./subagent-registry-read-snapshot.js";
 import { resolveControllerSessionKey } from "./subagent-registry-read-topology.js";
 import type { SubagentRunReadRecord } from "./subagent-registry-read.types.js";
+import { readAllSubagentRunsInWorker } from "./subagent-registry.store.read.js";
 import type { SubagentRunRecord } from "./subagent-registry.types.js";
 
 const persistedSubagentRunsReadCache: SubagentRunsCache<SubagentRunRecord> = {
@@ -272,6 +273,31 @@ export function consumeFreshSubagentRegistryRows<T>(
   consume: (runs: ReadonlyMap<string, SubagentRunRecord>) => T,
 ): Promise<T> {
   return consumeFreshSubagentRuns(persistedSubagentRunsReadCache, context, consume);
+}
+
+/** Registration shares the loaded registry; committed receipts keep retained generations current. */
+export async function prepareSubagentRegistrationRows(
+  childSessionKey: string,
+  selectedRunIds: readonly string[],
+  context: OpenClawStateWorkerContext,
+): Promise<() => ReadonlyMap<string, SubagentRunRecord>> {
+  await prepareSubagentRunsCache(
+    persistedSubagentRunsReadCache,
+    readAllSubagentRunsInWorker,
+    context,
+  );
+  return () => {
+    const snapshot = loadPersistedSubagentRunsForRead(persistedSubagentRunsReadCache, context);
+    const lookup = getSessionListLookup(persistedSubagentRunsReadCache, snapshot);
+    return new Map(
+      indexedSnapshotRows(snapshot, [
+        ...new Set([
+          ...lookup.selectRunIds(new Set(selectedRunIds)),
+          ...lookup.selectChildren(new Set([childSessionKey])),
+        ]),
+      ]).map((entry) => [entry.runId, entry]),
+    );
+  };
 }
 
 export function getSubagentRunsSnapshotForRead(

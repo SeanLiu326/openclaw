@@ -30,7 +30,12 @@ import {
 import { writeSessionEntry } from "../../../config/sessions/session-accessor.sqlite-entry-store.js";
 import { markCanonicalSessionValidationPending } from "../../../config/sessions/session-canonical-key.js";
 import { LegacyContextEngine } from "../../../context-engine/legacy.js";
+import { recordSessionParticipantBestEffort } from "../../../sessions/session-participant-recording.js";
+import { AsyncWorkScope } from "../../../shared/async-work-scope.js";
+import { createDeferredCore } from "../../../shared/deferred.js";
 import { runOpenClawAgentWriteTransaction } from "../../../state/openclaw-agent-db.js";
+import { resolveOpenClawAgentSqlitePath } from "../../../state/openclaw-agent-db.paths.js";
+import { runOpenClawAgentWriteAdmission } from "../../../state/openclaw-agent-write-admission.js";
 import { normalizeSessionDeliveryState } from "../../../utils/delivery-context.shared.js";
 import { maybeSpawnVisibleSession } from "../../tools/sessions-spawn-visible.js";
 import { loadSubagentRegistryFromSqlite } from "../registry/subagent-registry-state.fixture.test-support.js";
@@ -41,6 +46,7 @@ import {
 import { spawnAcpDirect } from "./acp-spawn.js";
 import { resolveSubagentChildPlan } from "./subagent-spawn-child-plan.js";
 import { resolveSubagentSpawnRequest } from "./subagent-spawn-request.js";
+import { createInitialSubagentSession } from "./subagent-spawn-session-patch.js";
 import { spawnSubagentDirect } from "./subagent-spawn.js";
 import { testing as spawnTesting } from "./subagent-spawn.test-support.js";
 
@@ -367,3 +373,77 @@ it.each([
     }
   },
 );
+
+it("inherits accepted human credit when participant persistence is still queued", async () => {
+  const agentId = "main";
+  const sessionKey = fixture.parentSessionKey;
+  const childSessionKey = "agent:main:subagent:child";
+  const storePath = resolveOpenClawAgentSqlitePath({ agentId });
+  const scope = { agentId, sessionKey, storePath };
+  await upsertSessionEntryCore(scope, { sessionId: "parent-id", updatedAt: 1 });
+  const releaseWriter = createDeferredCore();
+  const writerStarted = createDeferredCore();
+  const heldWriter = runOpenClawAgentWriteAdmission({ agentId, path: storePath }, async () => {
+    writerStarted.resolve();
+    await releaseWriter.promise;
+  });
+  await writerStarted.promise;
+  const work = new AsyncWorkScope();
+  const errors: unknown[] = [];
+  try {
+    work.run(() =>
+      recordSessionParticipantBestEffort({
+        ...scope,
+        storePath,
+        identity: { type: "profile", id: "human-requester" },
+        promptedAt: 1,
+        onError: (error) => errors.push(error),
+      }),
+    );
+    // The real recorder defers its write to the next microtask. Keep that original order.
+    await Promise.resolve();
+    expect(loadSessionEntryReadOnly(scope)?.participants ?? []).toEqual([]);
+    const creation = (async () => {
+      const request = await resolveSubagentSpawnRequest(
+        { task: "inherit accepted credit", context: "isolated" },
+        { agentSessionKey: sessionKey },
+      );
+      if (!request.ok) {
+        throw new Error(JSON.stringify(request.result));
+      }
+      try {
+        return await createInitialSubagentSession({
+          cfg: request.resolved.cfg,
+          requesterAgentId: agentId,
+          targetAgentId: agentId,
+          childSessionKey,
+          incognito: false,
+          requesterInternalKey: sessionKey,
+          parentTarget: request.resolved.requesterTarget,
+          creationPolicy: { actor: { type: "agent", id: agentId } },
+          completionOwnerSessionKey: sessionKey,
+          modelPatch: {},
+          collect: false,
+        });
+      } finally {
+        request.resolved.admissionReservation?.release();
+      }
+    })();
+    releaseWriter.resolve();
+    await heldWriter;
+    expect(await creation).toMatchObject({ status: "ok" });
+    await work.drain();
+
+    expect(errors).toEqual([]);
+    expect(loadSessionEntryReadOnly(scope)?.participants).toEqual([
+      { identity: { type: "profile", id: "human-requester" } },
+    ]);
+    const child = loadSessionEntryReadOnly({ ...scope, sessionKey: childSessionKey });
+    expect(child?.inheritedGitContributorProfileIds).toEqual(["human-requester"]);
+    expect(child?.participants ?? []).toEqual([]);
+  } finally {
+    releaseWriter.resolve();
+    await heldWriter;
+    await work.drain();
+  }
+});

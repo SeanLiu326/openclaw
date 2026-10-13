@@ -131,11 +131,13 @@ vi.mock("../../../sessions/session-lifecycle-events.js", () => ({
 vi.mock("./subagent-registry-state.js", async (importOriginal) => {
   const {
     consumeFreshSubagentRegistryRows,
+    prepareSubagentRegistrationRows,
     publishSubagentRunsAfterAtomicStore,
     rememberRestoredSubagentRunNotification,
   } = await importOriginal<typeof import("./subagent-registry-state.js")>();
   return {
     consumeFreshSubagentRegistryRows,
+    prepareSubagentRegistrationRows,
     rememberRestoredSubagentRunNotification,
     clearSubagentRunsReadCacheForTest: mocks.clearSubagentRunsReadCacheForTest,
     getSubagentRunsSnapshotForChildSession: mocks.getSubagentRunsSnapshotForChildSession,
