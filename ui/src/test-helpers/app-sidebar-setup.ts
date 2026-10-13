@@ -111,7 +111,10 @@ export function setupSidebarTest() {
       document.body.querySelectorAll<AppSidebarSessionNavigationElement>("openclaw-app-sidebar");
     // Open native menus keep scheduling frames while imports settle.
     for (const sidebar of sidebars) {
-      sidebar.dismissTransientMenus();
+      // Lazy shell fixtures can retain an unupgraded sidebar tag.
+      if (sidebar.matches(":defined")) {
+        sidebar.dismissTransientMenus();
+      }
     }
     await vi.dynamicImportSettled();
     // Removing a prompt's DOM does not settle its promise or release its reentrancy guard.
