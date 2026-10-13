@@ -136,6 +136,7 @@ export const databaseWorkerCoreTestFiles = [
   "src/agents/model-auth.profiles.test.ts",
   // Native credential fixtures need the host's exclusive offline writer custody.
   "src/agents/agent-model-discovery.auth.test.ts",
+  "src/agents/auth-profiles/session-override.model-endpoint.test.ts",
   "src/agents/auth-profiles.permissions.test.ts",
   "src/agents/prepared-model-catalog-worker.authority.test.ts",
   "src/agents/embedded-agent-runner/run/auth-plan.auth-pin.test.ts",
@@ -1271,6 +1272,7 @@ const databaseWorkerCoreTestFileSet = new Set(databaseWorkerCoreTestFiles);
 
 // Preserve watch admission for consumers previously inferred into fast lanes.
 export const databaseWorkerCoreFormerFastKinds = new Map([
+  ["src/agents/auth-profiles/session-override.model-endpoint.test.ts", "unitFast"],
   ["src/agents/harness/execution-environment.worker.test.ts", "unitFastIsolated"],
   ["src/acp/event-ledger.prepared.test.ts", "unitFastIsolated"],
   ["src/acp/event-ledger.test.ts", "unitFastIsolated"],
