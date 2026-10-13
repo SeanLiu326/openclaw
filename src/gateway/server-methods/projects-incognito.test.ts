@@ -5,7 +5,10 @@ import {
   clearRuntimeConfigSnapshot,
   setRuntimeConfigSnapshot,
 } from "../../config/runtime-snapshot.js";
-import { upsertSessionEntryCore } from "../../config/sessions/session-accessor.js";
+import {
+  patchSessionEntryCore,
+  upsertSessionEntryCore,
+} from "../../config/sessions/session-accessor.js";
 import { memorySessionActorOwners } from "../../config/sessions/session-actor-memory-owner.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { sha256HexPrefixCore } from "../../infra/crypto-digest.js";
@@ -174,30 +177,73 @@ test.each(["durable", "memory", "memory-changed-after-check"])(
   },
 );
 
-test("projects.list includes recents from an unbound memory session", async () => {
-  await withProjectState(async (state) => {
-    const profile = ensureProfileForEmail("incognito-projects@example.test");
-    const cfg = { agents: { entries: { main: { workspace: state.workspaceDir } } } };
-    setRuntimeConfigSnapshot(cfg);
-    const folder = path.join(state.workspaceDir, "private-project");
-    await fs.mkdir(folder, { recursive: true });
-    const sessionKey = "agent:main:dashboard:incognito-project-recent";
-    await upsertSessionEntryCore(
-      { env: state.env, sessionKey },
-      {
-        sessionId: "project-recent",
-        updatedAt: 1,
-        incognito: true,
-        spawnedCwd: folder,
-        execCwd: folder,
-        createdActor: { type: "human", source: "profile", id: profile.id },
-      },
-    );
-    expect(
-      await invokeProjectMethod("projects.list", {}, cfg, ["operator.write"], profile.id),
-    ).toMatchObject({
-      ok: true,
-      payload: { recents: [{ kind: "folder", folder, displayName: "private-project" }] },
+test.each(["unchanged", "unrelated visibility", "contributing visibility"])(
+  "projects.list checks contributing unbound memory recents after %s",
+  async (change) => {
+    await withProjectState(async (state) => {
+      const profile = ensureProfileForEmail("incognito-projects@example.test");
+      const cfg = { agents: { entries: { main: { workspace: state.workspaceDir } } } };
+      setRuntimeConfigSnapshot(cfg);
+      const folder = path.join(state.workspaceDir, "private-project");
+      await fs.mkdir(folder, { recursive: true });
+      const sessionKey = "agent:main:dashboard:incognito-project-recent";
+      await upsertSessionEntryCore(
+        { env: state.env, sessionKey },
+        {
+          sessionId: "project-recent",
+          updatedAt: 1,
+          incognito: true,
+          spawnedCwd: folder,
+          execCwd: folder,
+          createdActor: { type: "human", source: "profile", id: profile.id },
+        },
+      );
+      const unrelatedKey = `${sessionKey}-unrelated`;
+      if (change === "unrelated visibility") {
+        await upsertSessionEntryCore(
+          { env: state.env, sessionKey: unrelatedKey },
+          { sessionId: "unrelated", updatedAt: 1, incognito: true },
+        );
+      }
+      resolveRepositoryIdentity.mockImplementationOnce(async (checkoutPath) => {
+        if (change !== "unchanged") {
+          await patchSessionEntryCore(
+            {
+              env: state.env,
+              sessionKey: change === "unrelated visibility" ? unrelatedKey : sessionKey,
+            },
+            () => ({ visibility: "draft" }),
+          );
+        }
+        return {
+          checkoutRoot: checkoutPath,
+          repoRoot: checkoutPath,
+          originUrl: "",
+          fingerprint: checkoutPath,
+        };
+      });
+      const result = await invokeProjectMethod(
+        "projects.list",
+        { includeObserved: true },
+        cfg,
+        ["operator.write"],
+        profile.id,
+      );
+      if (change === "contributing visibility") {
+        expect(result).toMatchObject({
+          ok: false,
+          error: {
+            code: "UNAVAILABLE",
+            message: expect.stringContaining("Project access changed"),
+          },
+        });
+        expect(result?.payload).toBeUndefined();
+        return;
+      }
+      expect(result).toMatchObject({
+        ok: true,
+        payload: { recents: [{ kind: "folder", folder, displayName: "private-project" }] },
+      });
     });
-  });
-});
+  },
+);
