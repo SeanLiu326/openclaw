@@ -180,7 +180,7 @@ async function withInitialWriter(
           run({
             admission,
             controller,
-            manager: await openManager(),
+            manager: await transcript.withOwnedTranscriptWrite(openManager),
             openManager,
             promptState,
             preparedSessionTarget,
