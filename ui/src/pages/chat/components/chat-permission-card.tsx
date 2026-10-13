@@ -53,37 +53,37 @@ function ChatPermissionCard(props: {
     ),
   );
   const complete = () => Boolean(local()) && remaining().length === 0;
-  const state = () => {
+  const action = createMemo(() => {
     const snapshot = projection?.read();
     if (local()) {
       if (disabled().length > 0) {
-        return "disabled-in-openclaw";
+        return { state: "disabled-in-openclaw" as const, capabilities: disabled() };
       }
-      const entries =
-        snapshot?.permissions.entries.filter((entry) => remaining().includes(entry.id)) ?? [];
       for (const candidateState of [
         "stale-grant",
         "restart-required",
         "denied",
         "not-determined",
       ] as const) {
-        if (
-          entries.some(
-            (entry) =>
-              entry.state === candidateState ||
-              (candidateState === "denied" && entry.status === "denied") ||
-              (candidateState === "not-determined" && entry.status === "notDetermined"),
-          )
-        ) {
-          return candidateState;
+        const capabilities = remaining().filter((id) => {
+          const entry = snapshot?.permissions.entries.find((entry) => entry.id === id);
+          return (
+            entry?.state === candidateState ||
+            (candidateState === "denied" && entry?.status === "denied") ||
+            (candidateState === "not-determined" && entry?.status === "notDetermined")
+          );
+        });
+        if (capabilities.length > 0) {
+          return { state: candidateState, capabilities };
         }
       }
     }
-    return props.request.state;
-  };
-  const actionCapabilities = () => (state() === "disabled-in-openclaw" ? disabled() : remaining());
+    return { state: props.request.state, capabilities: remaining() };
+  });
   const following = () =>
-    state() === "disabled-in-openclaw" ? remaining().filter((id) => !disabled().includes(id)) : [];
+    action().state === "disabled-in-openclaw"
+      ? remaining().filter((id) => !disabled().includes(id))
+      : [];
   const grant = async () => {
     if (!local() || busy()) {
       return;
@@ -93,8 +93,7 @@ function ChatPermissionCard(props: {
     try {
       await native?.resolvePermission?.({
         ...props.request,
-        capabilities: remaining(),
-        state: state(),
+        ...action(),
       });
       native?.refresh();
     } catch (cause) {
@@ -116,7 +115,9 @@ function ChatPermissionCard(props: {
         {t("chat.permissions.neededOn", { node: props.request.nodeName ?? props.request.nodeId })}
       </p>
       <Show when={local()} fallback={<p>{t("chat.permissions.openApp")}</p>}>
-        <p>{t(complete() ? "chat.permissions.ready" : `chat.permissions.states.${state()}`)}</p>
+        <p>
+          {t(complete() ? "chat.permissions.ready" : `chat.permissions.states.${action().state}`)}
+        </p>
         <Show when={following().length > 0}>
           <p>{t("chat.permissions.following", { permissions: names(following()) })}</p>
         </Show>
@@ -129,8 +130,8 @@ function ChatPermissionCard(props: {
               disabled={busy()}
               onClick={() => void grant()}
             >
-              {t(`chat.permissions.actions.${state()}`, {
-                permissions: names(actionCapabilities()),
+              {t(`chat.permissions.actions.${action().state}`, {
+                permissions: names(action().capabilities),
               })}
             </button>
           }

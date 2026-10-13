@@ -133,35 +133,60 @@ it("keeps a multi-permission request blocked until both the toggle and OS grants
     f.view.getByText("Then grant the remaining permissions: Accessibility, Screen Recording."),
   ).toBeTruthy();
   await waitForSolid(() => {
-    expect(f.post).toHaveBeenCalledWith({ type: "resolve-permission", request: f.request });
+    expect(f.post).toHaveBeenCalledWith({
+      type: "resolve-permission",
+      request: { ...f.request, capabilities: ["computerControl"] },
+    });
     expect(enable.hasAttribute("disabled")).toBe(false);
   });
   f.snapshot.capabilities.computerControlEnabled = true;
   f.publish();
-  expect(
-    f.view.getByRole("button", { name: "Grant Accessibility, Screen Recording" }),
-  ).toBeTruthy();
+  const grant = f.view.getByRole("button", { name: "Grant Accessibility, Screen Recording" });
+  grant.click();
+  await waitForSolid(() => {
+    expect(f.post).toHaveBeenCalledWith({
+      type: "resolve-permission",
+      request: {
+        ...f.request,
+        capabilities: ["accessibility", "screenRecording"],
+        state: "not-determined",
+      },
+    });
+    expect(grant.hasAttribute("disabled")).toBe(false);
+  });
   expect(f.view.queryByText(/Then grant the remaining permissions/)).toBeNull();
   f.snapshot.permissions.entries = [
     { id: "accessibility", status: "granted", state: "stale-grant" },
     { id: "screenRecording", status: "granted", state: "restart-required" },
   ];
   f.publish();
-  f.view.getByRole("button", { name: "Open System Settings" }).click();
+  const settings = f.view.getByRole("button", { name: "Open System Settings" });
+  settings.click();
+  await waitForSolid(() => {
+    expect(f.post).toHaveBeenCalledWith({
+      type: "resolve-permission",
+      request: {
+        ...f.request,
+        capabilities: ["accessibility"],
+        state: "stale-grant",
+      },
+    });
+    expect(settings.hasAttribute("disabled")).toBe(false);
+  });
+  expect(f.view.queryByRole("button", { name: "Try again" })).toBeNull();
+  f.snapshot.permissions.entries[0] = { id: "accessibility", status: "granted" };
+  f.publish();
+  f.view.getByRole("button", { name: "Relaunch OpenClaw" }).click();
   await waitForSolid(() =>
     expect(f.post).toHaveBeenCalledWith({
       type: "resolve-permission",
       request: {
         ...f.request,
-        capabilities: ["accessibility", "screenRecording"],
-        state: "stale-grant",
+        capabilities: ["screenRecording"],
+        state: "restart-required",
       },
     }),
   );
-  expect(f.view.queryByRole("button", { name: "Try again" })).toBeNull();
-  f.snapshot.permissions.entries[0] = { id: "accessibility", status: "granted" };
-  f.publish();
-  expect(f.view.getByRole("button", { name: "Relaunch OpenClaw" })).toBeTruthy();
   f.snapshot.permissions.entries = [
     { id: "accessibility", status: "granted" },
     { id: "screenRecording", status: "granted" },

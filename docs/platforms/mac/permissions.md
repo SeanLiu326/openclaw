@@ -39,7 +39,8 @@ not automatically repeat the command.
 For a request that needs both an OpenClaw capability and macOS permissions, the
 **Enable** button names only the disabled capability. The card lists the remaining
 permissions below the explanation, then updates its action after the capability
-is enabled.
+is enabled. Each click dispatches only the current step's capabilities; later
+permission grants and relaunches require their own card actions.
 
 Accessibility is explicitly requested before a possibly stale grant is reported.
 If an Event Posting request remains denied, enable access in System Settings,
