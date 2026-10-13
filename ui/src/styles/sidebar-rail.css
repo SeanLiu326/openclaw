@@ -277,7 +277,7 @@ html:is(.openclaw-native-desktop, .openclaw-native-macos)
 }
 
 .shell--navigation-rail.shell--nav-collapsed:not(.shell--mobile-nav) {
-  --shell-controls-width: 68px;
+  --shell-controls-width: 32px;
   --shell-nav-width: var(--shell-nav-rail-width);
   grid-template-columns: var(--shell-nav-width) minmax(0, 1fr);
 }

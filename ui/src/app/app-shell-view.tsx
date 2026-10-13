@@ -160,23 +160,6 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
         </Show>
         <Show when={view().collapsedControls}>
           <div class="shell-chrome-controls">
-            <openclaw-tooltip
-              prop:content={`${t("nav.expand")} (${formatKeyboardShortcutCombo(KEYBOARD_SHORTCUT_COMBOS.toggleSidebar)})`}
-            >
-              <button
-                type="button"
-                class="shell-chrome-controls__button shell-chrome-controls__nav-toggle"
-                aria-label={t("nav.expand")}
-                aria-expanded="false"
-                data-env-avatar={
-                  view().config.environment
-                    ? view().config.assistantIdentity.name.charAt(0)
-                    : undefined
-                }
-                onClick={() => props.host.viewCallbacks.toggleSidebar()}
-                ref={createLitContentRef(() => icons.panelLeftOpen)}
-              />
-            </openclaw-tooltip>
             <Show when={!view().railAvailable}>
               <LitRouteHost
                 renderValue={() =>

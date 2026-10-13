@@ -123,24 +123,6 @@
   gap: var(--shell-chrome-controls-gap);
 }
 
-.shell-chrome-controls__nav-toggle[data-env-avatar]::before {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--accent-subtle) 80%, transparent);
-  color: var(--text-strong);
-  box-shadow: 0 0 0 2px var(--control-ui-environment-color);
-  content: attr(data-env-avatar);
-  font-size: var(--control-ui-text-sm);
-}
-
-.shell-chrome-controls__nav-toggle[data-env-avatar] > svg {
-  display: none;
-}
-
 .shell-chrome-controls__button {
   display: inline-flex;
   align-items: center;
@@ -185,7 +167,6 @@ html.openclaw-native-macos .shell-chrome-controls {
    provide native search/new-thread controls only while the rail is
    collapsed, so expanded sidebar search keeps the pointer path to the palette.
    Older apps only add openclaw-native-macos and keep all web controls. */
-html.openclaw-native-nav .shell-chrome-controls__nav-toggle,
 html.openclaw-native-nav .shell--nav-collapsed .shell-chrome-controls,
 html.openclaw-native-nav .topbar .topbar-nav-toggle {
   display: none;
