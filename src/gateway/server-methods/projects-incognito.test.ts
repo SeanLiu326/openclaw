@@ -205,7 +205,7 @@ test.each(["unchanged", "unrelated visibility", "contributing visibility"])(
           { sessionId: "unrelated", updatedAt: 1, incognito: true },
         );
       }
-      resolveRepositoryIdentity.mockImplementationOnce(async (checkoutPath) => {
+      listRegistryRecords.mockImplementationOnce(async () => {
         if (change !== "unchanged") {
           await patchSessionEntryCore(
             {
@@ -215,12 +215,7 @@ test.each(["unchanged", "unrelated visibility", "contributing visibility"])(
             () => ({ visibility: "draft" }),
           );
         }
-        return {
-          checkoutRoot: checkoutPath,
-          repoRoot: checkoutPath,
-          originUrl: "",
-          fingerprint: checkoutPath,
-        };
+        return [];
       });
       const result = await invokeProjectMethod(
         "projects.list",
