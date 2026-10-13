@@ -80,6 +80,7 @@ async function customEntry() {
   const picker = pickers[0]!;
   await picker.updateComplete;
   const root = picker;
+  root.querySelector<HTMLButtonElement>(".trigger")!.click();
   root.querySelector<HTMLButtonElement>(".more")!.click();
   flush();
   return {
@@ -175,7 +176,7 @@ describe("transcript message reactions", () => {
     const { root } = await customEntry();
     const nextControl = host.appendChild(document.createElement("button"));
     nextControl.focus();
-    root.querySelector("wa-popover")!.dispatchEvent(new CustomEvent("wa-after-hide"));
+    await Promise.resolve();
     flush();
     expect(root.querySelector("input")).toBeNull();
     expect(document.activeElement).toBe(nextControl);

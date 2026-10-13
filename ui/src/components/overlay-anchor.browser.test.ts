@@ -89,6 +89,28 @@ function spatialSource(surface: HTMLElement) {
 }
 
 describe("native cross-root anchor geometry", () => {
+  it("opens an anchor bound in an inert template after document adoption", async () => {
+    const template = document.createElement("template");
+    template.innerHTML = '<button>Open adopted menu</button><div popover="manual"></div>';
+    const trigger = template.content.querySelector("button")!;
+    const surface = template.content.querySelector("div")!;
+    trigger.style.cssText = "position:absolute;left:140px;top:110px;width:90px;height:30px";
+    surface.style.cssText =
+      "position:fixed;inset:auto;position-area:bottom;margin:6px 0 0;padding:0;border:0;width:120px;height:40px";
+    const owner = createOverlay(`anchor-proof-${++nextId}`);
+    owner.bindSurface(surface);
+    owner.bindTrigger(trigger);
+    owners.push(owner);
+    const binding = createOverlayAnchor(surface);
+    binding.update(trigger, "bottom");
+    bindings.push(binding);
+    document.body.append(template.content);
+    nodes.push(trigger, surface);
+    await open(owner);
+    expectAnchored(surface, trigger);
+    expect(spatialSource(surface).ownerDocument).toBe(document);
+  });
+
   it.each([
     { direction: "shadow-anchor", svg: false, mode: "open" },
     { direction: "shadow-anchor", svg: true, mode: "open" },
