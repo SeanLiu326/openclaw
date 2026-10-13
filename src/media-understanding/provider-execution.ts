@@ -23,7 +23,7 @@ import {
 } from "../provider-runtime/operation-retry.js";
 import { assertSecretOwnerAvailable } from "../secrets/runtime-degraded-state.js";
 import { assertRuntimeMediaRequestSecretOwnerAvailable } from "../secrets/runtime-media-secret-owner.js";
-import { createLazyRuntimeModule, createLazyRuntimeNamedExport } from "../shared/lazy-runtime.js";
+import { createLazyRuntimeModule } from "../shared/lazy-runtime.js";
 import { resolveOpenAiAudioAuthModelApi } from "./openai-audio-api.js";
 import { getMediaUnderstandingProvider, normalizeMediaProviderId } from "./provider-registry.js";
 import { resolveCliModelEntry } from "./resolve.js";
@@ -64,11 +64,20 @@ export function resolveProviderRequestContext(params: {
   return { baseUrl, headers, request };
 }
 
-const loadModelAuth = createLazyRuntimeModule(async () => await import("../agents/model-auth.js"));
-const loadHasAvailableAuthForProvider = createLazyRuntimeNamedExport(
-  () => import("../agents/model-auth.js"),
-  "hasAvailableAuthForProvider",
-);
+const loadModelAuth = createLazyRuntimeModule(async () => {
+  const {
+    hasAvailableAuthForProvider,
+    isProviderAuthError,
+    requireApiKey,
+    resolveApiKeyForProviderCore,
+  } = await import("../agents/model-auth.js");
+  return {
+    hasAvailableAuthForProvider,
+    isProviderAuthError,
+    requireApiKey,
+    resolveApiKeyForProviderCore,
+  };
+});
 
 export async function hasProviderAuthAvailable(params: {
   capability: MediaUnderstandingCapability;
@@ -86,7 +95,7 @@ export async function hasProviderAuthAvailable(params: {
   ) {
     return true;
   }
-  const hasAvailableAuthForProvider = await loadHasAvailableAuthForProvider();
+  const { hasAvailableAuthForProvider } = await loadModelAuth();
   return await hasAvailableAuthForProvider({
     ...params,
     modelApi: resolveOpenAiAudioAuthModelApi({
