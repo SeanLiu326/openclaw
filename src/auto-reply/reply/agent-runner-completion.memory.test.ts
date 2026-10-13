@@ -91,8 +91,6 @@ it("settles unbound memory usage and final custody without losing an intervening
           modelSelection: { provider: "fixture-provider", model: "before" },
           currentContextTokens: 400,
           estimatedCostUsd: 0.01,
-          hasUsage: true,
-          hasBilling: true,
           hasContextUpdate: true,
           hasFreshContextSnapshot: true,
           hasCurrentContextSnapshot: true,
