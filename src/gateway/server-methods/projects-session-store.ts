@@ -19,6 +19,7 @@ export function readMemoryProjectStores(assertCurrent: () => void) {
   const authority: SessionActorStorageAuthority = {
     assertCurrent() {
       assertCurrent();
+      binding?.actor.assertReadable();
       binding?.authority.assertCurrent();
     },
     authorize: (...args) => binding?.authority.authorize(...args),
