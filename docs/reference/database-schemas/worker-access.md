@@ -1718,8 +1718,15 @@ or update-format change.
 Qualified Gateway entry reads request lifecycle timestamps only when a consumer
 needs reset freshness. Metadata, observer, and native model ownership reads use
 the existing single-statement entry facts without a deferred transaction.
-Restart-safe chat admission still requests lifecycle timestamps and retains the
-snapshot that joins entry facts with a legacy transcript-header fallback.
+Restart-safe chat admission still requests lifecycle timestamps. Current entry
+timestamps and runtime targets reuse receipt-backed actor facts; cold exact
+entry facts need only their single-statement snapshot. Legacy timestamp fallback
+reads the header for the captured session ID through the transcript owner's
+snapshot. An explicit concurrent transcript replacement can pair the captured
+entry with a newer header timestamp; the next read refreshes this descriptive
+metadata. Rich cohorts retain a shared snapshot for entry, parent, transcript,
+authorization, and cold-state facts. Category preparation is also a single SELECT;
+its existing write transaction rereads selected entries before applying changes.
 Schemas, stored bytes, permissions, and update behavior are unchanged.
 
 Current readers consume committed rows without a probe connection, version
@@ -6555,6 +6562,34 @@ and joins accepted operations before closing worker transports. Uncertain outcom
 are never replayed. Schemas, stored bytes, retention, and update behavior are
 unchanged. The released synchronous auth-store save SDK remains available; quota
 reprobe and explicit block mutations retain their existing owners.
+
+Personal, shared, and per-agent Codex token-sharing credentials use the same
+credential authority owner. Cold preparation reads through the existing auth
+workers and retains source precedence, including an absent local profile that
+could later override shared credentials. The final bearer-fetch guard consumes
+current owner-held facts synchronously, with no SQLite statements or worker
+requests. Fingerprint, selected-profile, and validated pending-refresh checks
+remain at their existing boundaries; a persisted credential without retained
+authority is refused rather than recovered from a prepared snapshot.
+
+Credential writers begin publication synchronously before the durable effect.
+Worker admission denies the host guard before commit, and committed postimages
+or deletions reach the owner before settlement releases that denial. Native
+compatibility writers use the same publication ordering. A known rollback keeps
+the prior facts; an unknown outcome denies credential effects until owner restart,
+even if a later write succeeds. Usage, order, and cooldown-only changes do not
+revoke the retained credential. Catalog settlement carries its credential facts
+through the existing transport; it does not grant authority from a worker snapshot.
+
+Writer-entry custody covers login, import, setup, provider persistence, OAuth
+claim and settlement, logout, external-CLI synchronization, secrets apply and
+rollback, Doctor and relocation, catalog writes, and generic machine-state writes
+that accept the credential key. The custody ratchet checks the reviewed entry
+edges, including released synchronous SDK writers, whose signatures remain
+unchanged. Their synchronous reader still reaches the native auth JSON primitives,
+so those static T1 sites remain SDK compatibility debt. The Codex final guard no
+longer uses that native reader. Schemas, stored bytes, retention, and update behavior
+are unchanged.
 
 Runtime auth-source detection uses the existing agent and shared auth readers.
 It captures both possible shared-store targets before yielding and retains the
