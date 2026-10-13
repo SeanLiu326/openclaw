@@ -192,7 +192,10 @@ it("keeps native transcript speech with its current application context", async 
   });
   expect(container.querySelector(".chat-thread-inner")).toBe(thread);
   expect(revoke).toHaveBeenCalledWith("blob:synthetic-speech");
-  expectDefined(container.querySelector<HTMLButtonElement>('[aria-label="Read aloud"]')).click();
+  expectDefined(
+    container.querySelector<HTMLButtonElement>('[aria-label="Read aloud"]'),
+    "Read aloud action for the replacement application",
+  ).click();
   await waitForSolid(() => expect(replacementRequest).toHaveBeenCalledOnce());
   expect(request).toHaveBeenCalledOnce();
   transcript.hostDisconnected();
