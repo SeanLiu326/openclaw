@@ -9,10 +9,10 @@ import {
   setActivePluginRegistry,
 } from "openclaw/plugin-sdk/plugin-test-runtime";
 import { describe, expect, it, vi } from "vitest";
+import { startClockControlledAttempt } from "./run-attempt-lifecycle.test-support.js";
 import {
   createStartedThreadHarness,
   createTestParams,
-  runCodexAppServerAttempt,
   setupRunAttemptTestHooks,
 } from "./run-attempt-test-harness.js";
 
@@ -56,8 +56,8 @@ describe("plugin steering native admission", () => {
         },
         { persistedThreads: [] },
       );
-      const run = runCodexAppServerAttempt(params);
-      await run.waitForTurnAccepted();
+      const { run, started } = startClockControlledAttempt(params);
+      await started;
       const handle = registrations.mock.calls.findLast(
         (call) => call[0] === params.sessionId,
       )?.[1] as Parameters<typeof agentHarnessRuntime.setActiveEmbeddedRun>[1] | undefined;
