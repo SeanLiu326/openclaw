@@ -3997,6 +3997,7 @@ export const en: TranslationMap & {
       openApp:
         "Grant access in the OpenClaw Mac app on that device: Settings → This Mac → Permissions. Then tell the agent to try again.",
       ready: "Access is available. You can ask the agent to try again.",
+      following: "Then grant the remaining permissions: {permissions}.",
       actions: {
         "not-determined": "Grant {permissions}",
         denied: "Open System Settings",

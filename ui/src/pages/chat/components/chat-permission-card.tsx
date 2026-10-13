@@ -14,8 +14,8 @@ function ChatPermissionCard(props: {
   const projection = native ? projectNativeDeviceSettings(native) : null;
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
-  const names = () =>
-    props.request.capabilities
+  const names = (capabilities = props.request.capabilities) =>
+    capabilities
       .map((id) => {
         const key = `chat.permissions.capabilities.${id}`;
         const label = t(key);
@@ -43,16 +43,20 @@ function ChatPermissionCard(props: {
       return entry?.status !== "granted" || Boolean(entry.state);
     });
   });
+  const disabled = createMemo(() =>
+    remaining().filter(
+      (id) =>
+        id === "computerControl" ||
+        id === "canvas" ||
+        id === "cameraEnabled" ||
+        (id === "location" && projection?.read()?.permissions.location?.mode === "off"),
+    ),
+  );
   const complete = () => Boolean(local()) && remaining().length === 0;
   const state = () => {
     const snapshot = projection?.read();
     if (local()) {
-      if (
-        remaining().includes("computerControl") ||
-        remaining().includes("canvas") ||
-        remaining().includes("cameraEnabled") ||
-        (remaining().includes("location") && snapshot?.permissions.location?.mode === "off")
-      ) {
+      if (disabled().length > 0) {
         return "disabled-in-openclaw";
       }
       const entries =
@@ -77,6 +81,9 @@ function ChatPermissionCard(props: {
     }
     return props.request.state;
   };
+  const actionCapabilities = () => (state() === "disabled-in-openclaw" ? disabled() : remaining());
+  const following = () =>
+    state() === "disabled-in-openclaw" ? remaining().filter((id) => !disabled().includes(id)) : [];
   const grant = async () => {
     if (!local() || busy()) {
       return;
@@ -110,6 +117,9 @@ function ChatPermissionCard(props: {
       </p>
       <Show when={local()} fallback={<p>{t("chat.permissions.openApp")}</p>}>
         <p>{t(complete() ? "chat.permissions.ready" : `chat.permissions.states.${state()}`)}</p>
+        <Show when={following().length > 0}>
+          <p>{t("chat.permissions.following", { permissions: names(following()) })}</p>
+        </Show>
         <Show
           when={complete()}
           fallback={
@@ -119,7 +129,9 @@ function ChatPermissionCard(props: {
               disabled={busy()}
               onClick={() => void grant()}
             >
-              {t(`chat.permissions.actions.${state()}`, { permissions: names() })}
+              {t(`chat.permissions.actions.${state()}`, {
+                permissions: names(actionCapabilities()),
+              })}
             </button>
           }
         >

@@ -122,12 +122,26 @@ it("keeps a multi-permission request blocked until both the toggle and OS grants
     "accessibility",
     "screenRecording",
   ]);
+  f.snapshot.permissions.entries = [
+    { id: "accessibility", status: "notDetermined" },
+    { id: "screenRecording", status: "notDetermined" },
+  ];
+  f.publish();
+  const enable = f.view.getByRole("button", { name: "Enable Computer Control" });
+  enable.click();
   expect(
-    f.view.getByRole("button", {
-      name: "Enable Computer Control, Accessibility, Screen Recording",
-    }),
+    f.view.getByText("Then grant the remaining permissions: Accessibility, Screen Recording."),
   ).toBeTruthy();
+  await waitForSolid(() => {
+    expect(f.post).toHaveBeenCalledWith({ type: "resolve-permission", request: f.request });
+    expect(enable.hasAttribute("disabled")).toBe(false);
+  });
   f.snapshot.capabilities.computerControlEnabled = true;
+  f.publish();
+  expect(
+    f.view.getByRole("button", { name: "Grant Accessibility, Screen Recording" }),
+  ).toBeTruthy();
+  expect(f.view.queryByText(/Then grant the remaining permissions/)).toBeNull();
   f.snapshot.permissions.entries = [
     { id: "accessibility", status: "granted", state: "stale-grant" },
     { id: "screenRecording", status: "granted", state: "restart-required" },

@@ -36,6 +36,11 @@ needs to be removed and re-added. Once the app observes the required grants,
 **Try again** sends a short confirmation to the agent. Granting permission does
 not automatically repeat the command.
 
+For a request that needs both an OpenClaw capability and macOS permissions, the
+**Enable** button names only the disabled capability. The card lists the remaining
+permissions below the explanation, then updates its action after the capability
+is enabled.
+
 Accessibility is explicitly requested before a possibly stale grant is reported.
 If an Event Posting request remains denied, enable access in System Settings,
 then use **Relaunch OpenClaw**: macOS can cache that denial until the app restarts.
