@@ -162,7 +162,11 @@ export async function withSessionManagerWrite<T>(
                   } finally {
                     const next = manager.getSessionTarget();
                     if (next?.sessionKey === identity.sessionKey) {
-                      installSessionManagerIncognitoBinding(manager, { ...selected, target: next });
+                      // Terminal writes borrow authority for this operation only.
+                      installSessionManagerIncognitoBinding(manager, {
+                        ...incognitoBinding,
+                        target: next,
+                      });
                     }
                   }
                 }),

@@ -3,6 +3,7 @@ import { resolveSqliteSessionKey } from "../../config/sessions/session-accessor.
 import type { SessionTranscriptRuntimeTarget } from "../../config/sessions/session-accessor.types.js";
 import type {
   SessionActor,
+  SessionActorLifetime,
   SessionActorStorage,
 } from "../../config/sessions/session-actor-contract.js";
 import { memorySessionActorOwners } from "../../config/sessions/session-actor-memory-owner.js";
@@ -33,7 +34,7 @@ export type SessionManagerMemoryBinding = Readonly<{
   authority: SessionActorStorageAuthority;
   database: Readonly<OpenClawAgentDatabaseOptions & { agentId: string; path: string }>;
   target: SessionTranscriptRuntimeTarget;
-  acquire(create: boolean): Promise<SessionActor | undefined>;
+  acquire(create: boolean, lifetime?: SessionActorLifetime): Promise<SessionActor | undefined>;
 }>;
 
 export type ActiveSessionManagerMemoryBinding = SessionManagerMemoryBinding & {
@@ -104,11 +105,14 @@ function retainAcquisition(
     ...binding,
     // Storage retains the owner factory, not a live manager handle. A new caller lifetime
     // lets this manager survive release of the caller that originally opened it.
-    acquire: () =>
-      storage.acquire(sessionKey, {
-        assertCurrent,
-        assertReadable: assertCurrent,
-      }),
+    acquire: (_create, lifetime) =>
+      storage.acquire(
+        sessionKey,
+        lifetime ?? {
+          assertCurrent,
+          assertReadable: assertCurrent,
+        },
+      ),
   };
 }
 
@@ -159,18 +163,18 @@ export function captureSessionManagerIncognitoBinding(
     authority,
     target,
     database: { agentId, path, env: target.env },
-    async acquire(create) {
+    async acquire(create, acquiredLifetime = lifetime) {
       owner ??= memorySessionActorOwners.read({ agentId, path });
       if (owner) {
         return create
-          ? owner.acquire({ database: owner.identity, sessionKey }, lifetime)
-          : owner.acquireExisting(sessionKey, lifetime);
+          ? owner.acquire({ database: owner.identity, sessionKey }, acquiredLifetime)
+          : owner.acquireExisting(sessionKey, acquiredLifetime);
       }
       if (!create) {
         return undefined;
       }
       const acquired = await acquireSessionActorStorage(target, {
-        lifetime,
+        lifetime: acquiredLifetime,
         authority,
         create: true,
       });
@@ -204,6 +208,7 @@ export async function withSessionManagerMemoryActor<T>(
   }
   const selected = {
     ...retainAcquisition(binding, { actor }),
+    authority: borrowed?.authority ?? binding.authority,
     actor,
     storage: actor.storage!,
   };

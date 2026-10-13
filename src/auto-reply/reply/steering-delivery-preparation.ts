@@ -6,12 +6,12 @@ import {
 } from "../../agents/harness/host-private-capabilities.js";
 import { resolveRestartRecoverySteeringBlockReason } from "../../config/sessions/restart-recovery-receipt.js";
 import { retainPreparedSessionEntryPredicate } from "../../config/sessions/session-accessor.sqlite-entry-cache-publication-state.js";
+import { resolveSqliteSessionKey } from "../../config/sessions/session-accessor.sqlite-scope-helpers.js";
 import { captureSessionActorStorageOwner } from "../../config/sessions/session-actor-storage-binding.js";
 import { captureSessionEntryReadScope } from "../../config/sessions/session-entry-read-request.js";
 import { withSessionEntriesFromStoresInWorker } from "../../config/sessions/session-entry-read-runtime.js";
 import {
   collectSessionEntryLookupKeys,
-  normalizeStoreSessionKey,
   resolveSessionEntryCandidates,
 } from "../../config/sessions/store-entry.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
@@ -86,6 +86,7 @@ export function prepareSteeringDelivery(params: {
     sessionKey: params.sessionKey,
     storePath: params.storePath,
   });
+  const sessionKey = resolveSqliteSessionKey(scope.sessionKey, params.agentId);
   let active = true;
   let retained: ReturnType<typeof retainPreparedSessionEntryPredicate> | undefined;
   let unregister: (() => void) | undefined;
@@ -114,12 +115,7 @@ export function prepareSteeringDelivery(params: {
           env: scope.env,
           projection: "exact",
           snapshotFields: [],
-          sessionKeys: [
-            ...new Set([
-              normalizeStoreSessionKey(scope.sessionKey),
-              ...collectSessionEntryLookupKeys(scope.sessionKey),
-            ]),
-          ],
+          sessionKeys: [...new Set([sessionKey, ...collectSessionEntryLookupKeys(sessionKey)])],
         },
       ],
       ([read]) => {
@@ -129,7 +125,7 @@ export function prepareSteeringDelivery(params: {
         }
         const selected = resolveSessionEntryCandidates({
           entries: read.result.entries,
-          sessionKey: scope.sessionKey,
+          sessionKey,
           canonicalKeys: true,
         }).existing;
         assertEntry(selected?.entry);
@@ -142,7 +138,7 @@ export function prepareSteeringDelivery(params: {
         }
         retained = retainPreparedSessionEntryPredicate({
           databaseIdentity: `file:${identity}`,
-          sessionKey: selected?.sessionKey ?? normalizeStoreSessionKey(scope.sessionKey),
+          sessionKey: selected?.sessionKey ?? sessionKey,
           entry: selected?.entry,
           matches: (before, after) =>
             before?.sessionId === after?.sessionId &&
