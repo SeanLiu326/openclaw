@@ -597,9 +597,7 @@ export async function buildSessionEntries(
       identity &&
       !incognito &&
       !options.onTranscriptMessage &&
-      options.parseYieldEveryLines === undefined &&
-      !isIncognitoSessionKey(options.sessionKey) &&
-      !isIncognitoOpenClawAgentSqlitePath(identity.storePath, { agentId: identity.agentId })
+      options.parseYieldEveryLines === undefined
     ) {
       workerInputs.push({ absPath: input.absPath, options: { ...options, ...identity } });
       workerIndexes.push(index);
