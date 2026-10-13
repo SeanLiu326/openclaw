@@ -166,7 +166,7 @@ it("invalidates old profile reads before the next profile has fetched its prefer
 
 it("syncs explicit None and reports saved only after the profile acknowledgement", async () => {
   const delayed = createDeferred<unknown>();
-  const dispatched = createDeferred<void>();
+  const dispatched = createDeferred();
   const request = vi.fn(async (method: string) => {
     if (method === "users.prefs.get") {
       return { status: "ok", entries: {} };
@@ -179,7 +179,7 @@ it("syncs explicit None and reports saved only after the profile acknowledgement
   const writer = createServerPrefsWriter(request, scope, true, { ok: true }, false);
   await refreshServerPrefsProfile(writer, profileId, config);
   patchSettings({ background: none });
-  const committed = createDeferred<void>();
+  const committed = createDeferred();
   const afterCommit = vi.fn(() => committed.resolve());
   const transitions: string[] = [];
   const unsubscribe = subscribeServerUiPrefWrites(() => transitions.push(state().status));
