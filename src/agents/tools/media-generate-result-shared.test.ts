@@ -9,6 +9,7 @@ import {
   resetSessionEntryLifecycle,
 } from "../../config/sessions/session-accessor.js";
 import { STAGED_INPUT_GITIGNORE } from "../../media/staged-inputs.js";
+import { createDeferredCore } from "../../shared/deferred.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { resolveSessionAgentIds } from "../agent-scope.js";
 import { resetGeneratedMediaTaskActivityForTests } from "../media-generation-activity.test-support.js";
@@ -217,6 +218,8 @@ describe("generated media sandbox access", () => {
         path: "direct",
       });
       const scheduled: Array<() => Promise<void>> = [];
+      const generationStarted = createDeferredCore();
+      const finishGeneration = createDeferredCore();
       const results: Array<Awaited<ReturnType<typeof buildMediaGenerateToolExecutionResult>>> = [];
       scheduleMediaGenerationTaskCompletion({
         lifecycle,
@@ -226,9 +229,8 @@ describe("generated media sandbox access", () => {
         toolName: "image_generate",
         onWakeFailure: vi.fn(),
         run: async () => {
-          if (transition.endsWith("during-generation")) {
-            await invalidate();
-          }
+          generationStarted.resolve();
+          await finishGeneration.promise;
           const result = await buildMediaGenerateToolExecutionResult({
             ...params,
             attachments,
@@ -241,7 +243,16 @@ describe("generated media sandbox access", () => {
         },
       });
       expect(scheduled).toHaveLength(1);
-      await scheduled[0]!();
+      const pending = scheduled[0]!();
+      await generationStarted.promise;
+      try {
+        if (transition.endsWith("during-generation")) {
+          await invalidate();
+        }
+      } finally {
+        finishGeneration.resolve();
+        await pending;
+      }
       const result = results[0];
       if (!result) {
         throw new Error("Expected generated media to survive staging refusal");
