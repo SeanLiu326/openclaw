@@ -37,6 +37,9 @@ describe("generated media sandbox access", () => {
     await fs.writeFile(path.join(root, "other-session.png"), png);
     const result = await buildMediaGenerateToolExecutionResult({ ...params, sandbox });
     const [relativePath] = result.details.sandboxPaths as string[];
+    if (!relativePath) {
+      throw new Error("Expected a sandbox path for the generated image");
+    }
 
     expect(relativePath).toMatch(/^media\/inbound\/openclaw-staged-[^/]+\/image\.png$/);
     await expect(fs.readFile(path.join(workspace, relativePath))).resolves.toEqual(png);
