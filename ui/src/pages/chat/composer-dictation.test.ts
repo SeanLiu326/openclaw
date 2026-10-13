@@ -5,7 +5,8 @@ import { createDeferred } from "../../../../test/helpers/promise.js";
 import type { GatewayBrowserClient, GatewayEventFrame } from "../../api/gateway.ts";
 import { loadSettings, patchSettings } from "../../app/settings.ts";
 import { waitForFast } from "../../test-helpers/wait-for.ts";
-import { renderComposerVoiceButton } from "./components/chat-composer-controls.tsx";
+import { solidTemplate } from "./components/chat-composer-controls.ts";
+import { renderComposerVoiceButtonSolid } from "./components/chat-composer-controls.tsx";
 import { ComposerDictationController, insertComposerDictation } from "./composer-dictation.ts";
 
 type GatewayListener = (event: GatewayEventFrame) => void;
@@ -149,7 +150,7 @@ function createButtonHarness() {
   });
   function renderButton() {
     render(
-      renderComposerVoiceButton({
+      solidTemplate(renderComposerVoiceButtonSolid, {
         connected: true,
         readDictation: () => controller,
         onDictationPointerDown: (event) => controller.handlePointerDown(event),
