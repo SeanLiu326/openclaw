@@ -15,7 +15,7 @@ import { requireDirectorySync, syncDirectory, sha256File } from "../infra/direct
 import { copyFileHandle } from "../infra/file-descriptor.js";
 import { hasActiveGatewayStateOwner } from "../infra/gateway-state-owner.js";
 import { openNodeSqliteDatabase } from "../infra/node-sqlite.js";
-import { prepareSqliteReadOnlyLocationSyncInProcess } from "../infra/sqlite-readonly-location.js";
+import { prepareSqliteReadOnlyLocationSync } from "../infra/sqlite-snapshot-source.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import {
   readSnapshotExportEnvelope,
@@ -64,15 +64,18 @@ export async function verifyMatchedPostgresBackup(
   return envelope.manifest;
 }
 
-/** Inspect a private native image: closing it cannot release a live source's locks. */
+/** Acquire the private image in a child so source descriptor closes preserve live POSIX locks. */
 export function readBackupEngine(sourcePath: string): BackupEngine {
-  const prepared = prepareSqliteReadOnlyLocationSyncInProcess(sourcePath);
+  const prepared = prepareSqliteReadOnlyLocationSync(sourcePath);
   try {
     using db = openNodeSqliteDatabase(prepared.location, { readOnly: true });
-    if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE name='openclaw_engine_anchor'").get()) {
+    const hasAnchor = /* sqlite-allow-raw: inspect engine-anchor schema metadata. */ db
+      .prepare("SELECT 1 FROM sqlite_schema WHERE name='openclaw_engine_anchor'")
+      .get();
+    if (!hasAnchor) {
       return { engine: "sqlite" };
     }
-    const rows = db
+    const rows = /* sqlite-allow-raw: inspect the matched anchor's physical identity. */ db
       .prepare("SELECT store_id, engine, schema FROM openclaw_engine_anchor LIMIT 2")
       .all();
     const row = rows[0];
@@ -191,7 +194,7 @@ async function capturePostgresBackupInWorker(params: {
         storeId: anchor.storeId,
         assertCurrent: params.assertCurrent,
       });
-      db.exec(`PRAGMA user_version = ${descriptor.version}`);
+      db.exec(`PRAGMA user_version = ${descriptor.version}`); // sqlite-allow-raw: stamp the materialized export schema.
     }
     const sanitizedDifferences: string[] = [];
     params.assertCurrent();
@@ -205,7 +208,9 @@ async function capturePostgresBackupInWorker(params: {
         targetPath: image,
         preserveRowIds: true,
         async transform(db) {
-          const before = db.prepare("SELECT total_changes() AS n").get()?.n;
+          const before = /* sqlite-allow-raw: count the sanitizer's native changes. */ db
+            .prepare("SELECT total_changes() AS n")
+            .get()?.n;
           sanitizeOpenClawGlobalStateSnapshot(db);
           const { embedSessionColdArchivesInSnapshot } =
             await import("../config/sessions/session-cold-storage-backup.js");
@@ -213,7 +218,10 @@ async function capturePostgresBackupInWorker(params: {
             database: db,
             sourceStorePath: params.sourcePath,
           });
-          if (db.prepare("SELECT total_changes() AS n").get()?.n !== before) {
+          const after = /* sqlite-allow-raw: count the sanitizer's native changes. */ db
+            .prepare("SELECT total_changes() AS n")
+            .get()?.n;
+          if (after !== before) {
             sanitizedDifferences.push("transient-state");
           }
         },
@@ -358,8 +366,9 @@ export async function captureGitPostgresBackup(params: {
   snapshotPath: string;
   outputPath: string;
   identity: GitBackupIdentity;
+  physicalEngine?: BackupEngine["engine"];
 }): Promise<GitBackupManifest | undefined> {
-  if (readBackupEngine(params.snapshotPath).engine !== "postgres") {
+  if ((params.physicalEngine ?? readBackupEngine(params.snapshotPath).engine) !== "postgres") {
     return undefined;
   }
   await fs.mkdir(params.outputPath, { mode: 0o700 });
@@ -400,7 +409,7 @@ export function fingerprintPostgresBackup(sourcePath: string, config: OpenClawCo
 if (parentPort && workerData?.openclawDatabaseBackup === true) {
   const { serveWorkerTasks } = await import("../infra/worker-task-server.js");
   serveWorkerTasks<BackupReply>((value, _channel, control) => {
-    // The private one-shot host is the sole producer of this structured-clone payload.
+    // SAFETY: The private one-shot host is the sole producer of this structured-clone payload.
     const task = value as BackupTask;
     if (task.operation === "fingerprint") {
       const anchor = readBackupEngine(task.params.sourcePath);

@@ -282,8 +282,8 @@ export async function createGitBackup(params: {
     }).readConfigFileSnapshot();
     for (const file of await discoverBackupDatabasePaths({ stateDir: params.stateDir, config })) {
       if (
-        readBackupEngine(file).engine === "postgres" &&
-        !databases.some((database) => database.path === file)
+        !databases.some((database) => database.path === file) &&
+        readBackupEngine(file).engine === "postgres"
       ) {
         databases.push({ path: file, identity: { role: "generic", id: "workboard" } });
       }
@@ -311,8 +311,9 @@ export async function createGitBackup(params: {
       const outputPath = path.join(staging.dir, gitBackupScopePath(database.identity));
       await fs.mkdir(path.dirname(outputPath), { recursive: true, mode: 0o700 });
       const copyPath = staging.path(`${database.identity.role}-${index}.sqlite`);
-      const postgres = readBackupEngine(database.path).engine === "postgres";
+      let postgres: boolean;
       try {
+        postgres = readBackupEngine(database.path).engine === "postgres";
         if (!postgres) {
           await createOpenClawSnapshotCopy({
             database: { ...database, path: await fs.realpath(database.path) },
@@ -333,6 +334,7 @@ export async function createGitBackup(params: {
           snapshotPath: postgres ? database.path : copyPath,
           outputPath,
           identity: database.identity,
+          physicalEngine: postgres ? "postgres" : "sqlite",
           excludeSecrets: params.excludeSecrets,
         }),
       );

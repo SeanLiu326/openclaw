@@ -44,7 +44,7 @@ export type SnapshotVerificationResult = {
 
 export type SnapshotSummary = SnapshotResult;
 
-export type EngineSnapshotManifest =
+type EngineSnapshotManifest =
   | SnapshotManifest
   | import("./export-envelope.js").PostgresExportEnvelope;
 export type EngineSnapshotResult = {

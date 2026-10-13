@@ -255,6 +255,7 @@ export async function dumpGitBackupDatabase(params: {
   outputPath: string;
   identity: GitBackupIdentity;
   excludeSecrets?: boolean;
+  physicalEngine?: "sqlite" | "postgres";
 }): Promise<GitBackupManifest> {
   const identity = normalizeIdentity(params.identity);
   const { captureGitPostgresBackup } = await import("./database-backup.js");
