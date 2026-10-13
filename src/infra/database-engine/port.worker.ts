@@ -13,6 +13,7 @@ import {
   withSqliteForeignKeysDisabled,
 } from "../sqlite-strict.js";
 import { runSqliteImmediateTransactionSync } from "../sqlite-transaction.js";
+import { writeSqliteUserVersion } from "../sqlite-user-version.js";
 import {
   assertPostgresCatalog,
   postgresCatalogQuery,
@@ -499,6 +500,7 @@ export async function materializeDatabasePort(params: {
         params.storeId,
       ]);
     } else {
+      writeSqliteUserVersion(destination.db, descriptor.version);
       assertSqliteIntegrity(destination.db, "Port SQLite destination");
     }
     const verified = {

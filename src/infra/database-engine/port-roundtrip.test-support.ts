@@ -7,6 +7,7 @@ import { Client } from "pg";
 import { deriveMeetingTranscriptSummaryColumns } from "../../transcripts/store-columns.js";
 import { openNodeSqliteDatabase } from "../node-sqlite.js";
 import { admitSqliteSchema, getAdmittedSqliteSchemaFacts } from "../sqlite-schema-facts.js";
+import { readSqliteUserVersion } from "../sqlite-user-version.js";
 import { withEngineStoreAdmission } from "./admission-scope.js";
 import { openEngineStore } from "./open.js";
 import { materializeDatabasePort, type PortDescriptor } from "./port.worker.js";
@@ -250,6 +251,7 @@ async function run() {
     }
     const restored = open();
     const reverse = await copyBack(destination.namespace, restored, descriptor);
+    assert.equal(readSqliteUserVersion(restored), descriptor.version);
     assert.deepEqual(canonical(restored, descriptor), before);
     assert.deepEqual(canonical(source, descriptor), before);
     assert.deepEqual(reverse, forward);

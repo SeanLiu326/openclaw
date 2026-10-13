@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { parentPort, workerData } from "node:worker_threads";
 import { withTempWorkspace } from "@openclaw/fs-safe/temp";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { readEngineAnchor } from "../infra/database-engine/open.js";
 import {
   inspectDatabasePort,
   materializeDatabasePort,
@@ -69,15 +70,10 @@ export function readBackupEngine(sourcePath: string): BackupEngine {
   const prepared = prepareSqliteReadOnlyLocationSync(sourcePath);
   try {
     using db = openNodeSqliteDatabase(prepared.location, { readOnly: true });
-    const hasAnchor = /* sqlite-allow-raw: inspect engine-anchor schema metadata. */ db
-      .prepare("SELECT 1 FROM sqlite_schema WHERE name='openclaw_engine_anchor'")
-      .get();
-    if (!hasAnchor) {
+    const rows = readEngineAnchor(db);
+    if (!rows) {
       return { engine: "sqlite" };
     }
-    const rows = /* sqlite-allow-raw: inspect the matched anchor's physical identity. */ db
-      .prepare("SELECT store_id, engine, schema FROM openclaw_engine_anchor LIMIT 2")
-      .all();
     const row = rows[0];
     if (
       rows.length !== 1 ||
@@ -194,7 +190,6 @@ async function capturePostgresBackupInWorker(params: {
         storeId: anchor.storeId,
         assertCurrent: params.assertCurrent,
       });
-      db.exec(`PRAGMA user_version = ${descriptor.version}`); // sqlite-allow-raw: stamp the materialized export schema.
     }
     const sanitizedDifferences: string[] = [];
     params.assertCurrent();
