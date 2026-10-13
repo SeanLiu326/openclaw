@@ -226,7 +226,9 @@ it("keeps transcript residency across entry patches without losing either owner'
         shouldCommitIf,
       });
     const reads = trackSqliteStatementExecutions(f.database.db, ["select", "watermark"], (sql) =>
-      sql.includes('as "max_seq"') && sql.includes('"session_transcript_cold_archives"')
+      sql.startsWith("select coalesce(") &&
+      sql.includes('as "max_seq"') &&
+      sql.includes('"session_transcript_cold_archives"')
         ? "watermark"
         : /^select\b/iu.test(sql)
           ? "select"
