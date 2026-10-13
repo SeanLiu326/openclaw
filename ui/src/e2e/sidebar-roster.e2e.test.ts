@@ -32,6 +32,10 @@ suite.define(() => {
     await suite.withPage(
       { locale: "en-US", serviceWorkers: "block", viewport: { height: 800, width: 1280 } },
       async ({ page }) => {
+        await page.addInitScript(() => {
+          // Exercise the full refresh collection window deterministically.
+          Math.random = () => 0;
+        });
         await page.clock.install();
         const agentsList: AgentsListResult = {
           defaultId: "main",
@@ -281,7 +285,7 @@ suite.define(() => {
           agentId: "main",
           key: "agent:main:main",
         });
-        // Run nested mock response timers so queued reads can acquire bootstrap slots.
+        // Deliver nested mock response timers so background-read admission can drain.
         await page.clock.runFor(5_001);
         await expect.poll(async () => (await activityReads()).length).toBe(initialReads + 1);
         for (let index = 0; index < 3; index += 1) {
@@ -294,12 +298,10 @@ suite.define(() => {
           expect(await activityReads()).toHaveLength(initialReads + 1);
         }
         await gateway.resolveDeferred("sessions.list");
-        await page.clock.resume();
-        await sidebar.getByText("Harbor project refreshed", { exact: true }).waitFor();
-        await pauseVirtualClock(page);
         // A held read reaches the maximum cooldown before its one trailing refresh.
         await page.clock.runFor(15_001);
-        await expect.poll(async () => (await activityReads()).length).toBe(initialReads + 2);
+        await sidebar.getByText("Harbor project refreshed", { exact: true }).waitFor();
+        expect(await activityReads()).toHaveLength(initialReads + 2);
         await page.clock.resume();
         await expect.poll(() => sessionRows.count()).toBe(8);
 

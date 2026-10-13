@@ -31,6 +31,7 @@ import { floatingSidebarAttentionVisible, renderFloatingUpdateCard } from "./nav
 import { RouterOutlet } from "./router-outlet.tsx";
 import { NAV_WIDTH_MAX, NAV_WIDTH_MIN } from "./settings.ts";
 import { renderCollapsedHomeToggle } from "./shell-assistant-toggles.ts";
+import { ShellLayoutProvider } from "./shell-layout-traits-solid.tsx";
 
 export type { ShellViewHost } from "./app-shell-view-state.ts";
 
@@ -50,7 +51,8 @@ export function renderApplicationShell(host: ShellViewHost): SolidJSX.Element {
   return <ApplicationShell host={host} />;
 }
 
-function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
+export function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
+  let content!: HTMLElement;
   const view = createMemo(() => {
     props.host.shellRevision();
     return readShellView(props.host);
@@ -281,7 +283,10 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
               "content--actions-blocked": view().pageActionsBlocked,
             },
           ]}
-          ref={props.host.shellLayout.contentRef}
+          ref={(element) => {
+            content = element;
+            props.host.shellLayout.contentRef(element);
+          }}
           tabindex={-1}
           onMouseDown={beginNativeWindowDragFromTopInset}
           inert={
@@ -316,16 +321,29 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
           <Show when={view().embedNavigation}>
             <LitRouteHost renderValue={() => view().navigationContent} />
           </Show>
-          <RouterOutlet
-            inert={view().pageActionsBlocked || view().reloadRequired}
-            aria-disabled={view().pageActionsBlocked || view().reloadRequired ? "true" : undefined}
-            router={view().runtime.router}
-            retryContext={view().context}
-            retryEnabled={view().gatewayConnected}
-            retentionScope={view().presentationScope}
-            onNotFound={props.host.recoverNotFoundRoute}
-            notFoundRecoveryReady={view().gatewayConnected}
-          />
+          <ShellLayoutProvider
+            value={{
+              get owner() {
+                return props.host.shellLayout;
+              },
+              get host() {
+                return content;
+              },
+            }}
+          >
+            <RouterOutlet
+              inert={view().pageActionsBlocked || view().reloadRequired}
+              aria-disabled={
+                view().pageActionsBlocked || view().reloadRequired ? "true" : undefined
+              }
+              router={view().runtime.router}
+              retryContext={view().context}
+              retryEnabled={view().gatewayConnected}
+              retentionScope={view().presentationScope}
+              onNotFound={props.host.recoverNotFoundRoute}
+              notFoundRecoveryReady={view().gatewayConnected}
+            />
+          </ShellLayoutProvider>
         </main>
         <Show when={view().shellConnectionStatus}>
           <div class="shell-connection-status">
