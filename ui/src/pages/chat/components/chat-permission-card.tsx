@@ -119,12 +119,7 @@ function ChatPermissionCard(props: {
               disabled={busy()}
               onClick={() => void grant()}
             >
-              {t(
-                state() === "restart-required"
-                  ? "chat.permissions.relaunch"
-                  : "chat.permissions.grant",
-                { permissions: names() },
-              )}
+              {t(`chat.permissions.actions.${state()}`, { permissions: names() })}
             </button>
           }
         >
