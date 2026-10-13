@@ -19,10 +19,7 @@ import { retainGatewayPluginMetadata } from "../../plugins/plugin-metadata-lifec
 import { resolvePluginMetadataSnapshotAsync } from "../../plugins/plugin-metadata-snapshot.js";
 import * as sessionLifecycle from "../../sessions/session-lifecycle-admission.js";
 import { resolveOpenClawAgentSqlitePath } from "../../state/openclaw-agent-db.paths.js";
-<<<<<<< HEAD
 import { requireOpenClawStateDatabaseIdentity } from "../../state/openclaw-state-db-cache.js";
-=======
->>>>>>> ccc049860e1e (fix(gateway): preserve custody through native settlement)
 import { openOpenClawStateDatabase } from "../../state/openclaw-state-db.js";
 import { prepareUserProfileCatalog } from "../../state/user-profile-list.js";
 import { createTestGatewayScheduler } from "../../test-utils/gateway-scheduler-clock.js";
@@ -36,11 +33,8 @@ import {
   sharingPolicyClient,
 } from "../session-sharing.test-utils.js";
 import { createWorkerSessionPlacementStore } from "../worker-environments/placement-store.js";
-<<<<<<< HEAD
-import { stagePlacementTurnClaimWorkerPublication } from "../worker-environments/placement-turn-authority.js";
-=======
 import { advancePlacementFixtureToActive } from "../worker-environments/placement-test-fixtures.js";
->>>>>>> ccc049860e1e (fix(gateway): preserve custody through native settlement)
+import { stagePlacementTurnClaimWorkerPublication } from "../worker-environments/placement-turn-authority.js";
 import { admitChatSend } from "./chat-send-admission.js";
 import { runChatSendPreAdmission } from "./chat-send-pre-admission.js";
 import { normalizeChatSendRequest } from "./chat-send-request.js";
@@ -187,6 +181,7 @@ it.each(["unchanged", "caller revoked", "session replaced"] as const)(
         request: request.value,
         client: null,
         context,
+        isDirectExternalUser: true,
       });
       if (!prepared.ok) {
         throw new Error("Session preparation failed");
