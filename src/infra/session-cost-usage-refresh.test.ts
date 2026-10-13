@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { describePendingFakeTimers } from "../../test/helpers/fake-timer-diagnostics.js";
 import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
 import { setLoggerOverride } from "../logging/logger.js";
 import { loggingState } from "../logging/state.js";
@@ -99,7 +100,7 @@ describe("session cost usage refresh", () => {
         expect(refresh).toHaveBeenCalledTimes(12);
         await vi.advanceTimersByTimeAsync(1);
         expect(refresh).toHaveBeenCalledTimes(13);
-        expect(vi.getTimerCount()).toBe(0);
+        expect(vi.getTimerCount(), describePendingFakeTimers()).toBe(0);
         expect(
           await loadCostUsageSummaryFromCache({ ...params, requestRefresh: false }),
         ).toMatchObject({
@@ -118,7 +119,7 @@ describe("session cost usage refresh", () => {
           ).toMatchObject({
             cacheStatus: { status: "stale" },
           });
-          expect(vi.getTimerCount()).toBe(0);
+          expect(vi.getTimerCount(), describePendingFakeTimers()).toBe(0);
         } finally {
           refresh.mockReset();
           vi.useRealTimers();
@@ -203,7 +204,7 @@ describe("session cost usage refresh", () => {
           late,
         ]);
         expect(accepted.map((params) => params.rebuildRows)).toEqual([[], [rebuild], []]);
-        expect(vi.getTimerCount()).toBe(0);
+        expect(vi.getTimerCount(), describePendingFakeTimers()).toBe(0);
       } finally {
         scope.beginClose();
         await vi.advanceTimersByTimeAsync(50);
@@ -244,7 +245,7 @@ describe("session cost usage refresh", () => {
           await vi.advanceTimersByTimeAsync(50);
           expect(events).toEqual(["refresh settled", "scope drained"]);
           expect(refresh).toHaveBeenCalledOnce();
-          expect(vi.getTimerCount()).toBe(0);
+          expect(vi.getTimerCount(), describePendingFakeTimers()).toBe(0);
         } finally {
           release.resolve();
           scope.beginClose();
@@ -308,7 +309,7 @@ describe("session cost usage refresh", () => {
           );
           expect(write).toHaveBeenCalledWith(expect.stringContaining("background refresh"));
           expect(refresh).toHaveBeenCalledOnce();
-          expect(vi.getTimerCount()).toBe(0);
+          expect(vi.getTimerCount(), describePendingFakeTimers()).toBe(0);
         } finally {
           try {
             release.resolve("refreshed");
@@ -346,7 +347,7 @@ describe("session cost usage refresh", () => {
           await scope.drain();
           await vi.advanceTimersByTimeAsync(50);
           expect(refresh).toHaveBeenCalledTimes(callsBeforeClose);
-          expect(vi.getTimerCount()).toBe(0);
+          expect(vi.getTimerCount(), describePendingFakeTimers()).toBe(0);
         } finally {
           scope.beginClose();
           await vi.advanceTimersByTimeAsync(50);
