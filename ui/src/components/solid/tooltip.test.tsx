@@ -264,7 +264,7 @@ describe("Solid tooltip policy", () => {
     flush();
     expect(first.host.hasAttribute("open")).toBe(true);
     const second = fixture();
-    second.host.addEventListener("wa-show", (event) => event.preventDefault());
+    second.host.addEventListener("overlay-show", (event) => event.preventDefault());
     pointer(second.trigger, "pointerenter");
     vi.advanceTimersByTime(150);
     await second.host.updateComplete;
@@ -357,7 +357,7 @@ describe("Solid tooltip policy", () => {
         expect(shadow.activeElement).toBe(action);
         expect(host.hasAttribute("open")).toBe(true);
         const veto = (event: Event) => event.preventDefault();
-        host.addEventListener("wa-hide", veto);
+        host.addEventListener("overlay-hide", veto);
         action.dispatchEvent(
           new KeyboardEvent("keydown", {
             key: "Escape",
@@ -368,7 +368,7 @@ describe("Solid tooltip policy", () => {
         );
         expect(shadow.activeElement).toBe(action);
         expect(host.hasAttribute("open")).toBe(true);
-        host.removeEventListener("wa-hide", veto);
+        host.removeEventListener("overlay-hide", veto);
         action.dispatchEvent(
           new KeyboardEvent("keydown", {
             key: "Escape",
@@ -406,14 +406,14 @@ describe("Solid tooltip policy", () => {
     const action = host.querySelector<HTMLButtonElement>('[slot="content"] button')!;
     action.focus();
     const veto = (event: Event) => event.preventDefault();
-    host.addEventListener("wa-hide", veto);
+    host.addEventListener("overlay-hide", veto);
     action.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
     );
     expect(document.activeElement).toBe(action);
     expect(host.hasAttribute("open")).toBe(true);
     expect(surface.querySelector(".tooltip-rich-content")?.hasAttribute("inert")).toBe(false);
-    host.removeEventListener("wa-hide", veto);
+    host.removeEventListener("overlay-hide", veto);
     action.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
     );
