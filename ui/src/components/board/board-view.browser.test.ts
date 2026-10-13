@@ -162,10 +162,8 @@ describe.skipIf(!hasBrowserLayout)("openclaw-board-view browser layout", () => {
       };
       const switchTab = async (tabId: string) => {
         view
-          .querySelector(".board-tabs__track")!
-          .dispatchEvent(
-            new CustomEvent("wa-tab-show", { detail: { name: tabId }, bubbles: true }),
-          );
+          .querySelector<HTMLButtonElement>(`.board-tabs__tab[data-board-tab-id="${tabId}"]`)!
+          .click();
         await view.updateComplete;
         await cell.updateComplete;
       };
@@ -173,9 +171,7 @@ describe.skipIf(!hasBrowserLayout)("openclaw-board-view browser layout", () => {
         const { page } = await import("vitest/browser");
         cell.querySelector<HTMLElement>(".board-widget")!.focus();
         await page.elementLocator(cell.querySelector(".board-widget__menu-trigger")!).click();
-        await page
-          .elementLocator(cell.querySelector('wa-dropdown-item[value="move:ops"]')!)
-          .click();
+        await page.elementLocator(cell.querySelector('[data-value="move:ops"]')!).click();
         await vi.waitFor(() =>
           expect(view.snapshot?.widgets.find((widget) => widget.name === "first")?.tabId).toBe(
             "ops",
@@ -299,7 +295,7 @@ describe.skipIf(!hasBrowserLayout)("openclaw-board-view browser layout", () => {
       hover: widget.matches(":hover"),
       focusWithin: widget.matches(":focus-within"),
       dragging: widget.classList.contains("board-widget--dragging"),
-      menuOpen: widget.querySelector(".board-widget__menu[open]") !== null,
+      menuOpen: widget.querySelector('.board-widget__menu-trigger[aria-expanded="true"]') !== null,
     });
     expect(getComputedStyle(bar).visibility, revealState).toBe("hidden");
   }
@@ -332,6 +328,46 @@ describe.skipIf(!hasBrowserLayout)("openclaw-board-view browser layout", () => {
     await vi.waitFor(() => expectChromeHidden(widget!, bar!));
   });
 
+  it("scrolls a dense widget menu to Remove with End and activates it", async () => {
+    const { userEvent } = await import("vitest/browser");
+    const selected = createDeferred();
+    const applyOps = vi.fn(async () => {
+      selected.resolve();
+      return undefined;
+    });
+    const view = await mount(applyOps);
+    view.snapshot = {
+      ...structuredClone(source),
+      tabs: Array.from({ length: 30 }, (_, index) => ({
+        tabId: index ? `tab-${index}` : "main",
+        title: index ? `Dashboard ${index + 1}` : "Main",
+        position: index,
+        chatDock: "right" as const,
+      })),
+      widgets: [source.widgets[0]!],
+    };
+    await view.updateComplete;
+    const cell = view.querySelector("openclaw-board-widget-cell")!;
+    await cell.updateComplete;
+    cell.querySelector<HTMLElement>(".board-widget")!.focus();
+    await userEvent.click(cell.querySelector<HTMLButtonElement>(".board-widget__menu-trigger")!);
+    const panel = cell.querySelector<HTMLElement>(".board-widget__menu-panel")!;
+    expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+
+    await userEvent.keyboard("{End}");
+    await Promise.resolve();
+    const remove = cell.querySelector<HTMLButtonElement>(".board-widget__menu-danger")!;
+    expect(document.activeElement).toBe(remove);
+    const bounds = panel.getBoundingClientRect();
+    const row = remove.getBoundingClientRect();
+    expect(row.top).toBeGreaterThanOrEqual(bounds.top);
+    expect(row.bottom).toBeLessThanOrEqual(bounds.bottom);
+    expect(panel.scrollTop).toBeGreaterThan(0);
+
+    await userEvent.keyboard("{Enter}");
+    await selected.promise;
+    expect(applyOps).toHaveBeenCalledWith([{ kind: "widget_remove", name: "first" }]);
+  });
   it("keeps an active gesture owned by its initiating pointer", async () => {
     const applyOps = vi.fn(async () => undefined);
     const view = await mount(applyOps);
