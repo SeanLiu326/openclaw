@@ -10,6 +10,7 @@ import { buildMediaGenerateToolExecutionResult } from "./media-generate-result-s
 import { loadMediaToolReferences } from "./media-tool-shared.js";
 
 const { resolveSandboxContext } = vi.hoisted(() => ({ resolveSandboxContext: vi.fn() }));
+// mock-isolation: Provisioning stays synthetic so this test never opens real sandbox state.
 vi.mock("../sandbox/context.js", () => ({ resolveSandboxContext }));
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
