@@ -3,6 +3,7 @@ import { repeat } from "lit/directives/repeat.js";
 import { html as staticHtml, literal } from "lit/static-html.js";
 import { presenceUserKey } from "../../../src/shared/presence-user.ts";
 import type { ApplicationGateway } from "../app/gateway.ts";
+import { beginNativeWindowDrag } from "../app/native-window-drag.ts";
 import { t } from "../i18n/index.ts";
 import { renderHoverMarquee } from "../lib/hover-marquee.ts";
 import {
@@ -12,9 +13,9 @@ import {
   projectOnlinePresenceViewers,
 } from "../lib/presence-users.ts";
 import type { AppSidebarRenderHost } from "./app-sidebar-render.ts";
-import { renderSidebarSessionSectionHeader } from "./app-sidebar-session-section-header.ts";
 import { icons } from "./icons.ts";
 import { personActivityLink, personActivityRouting } from "./person-activity-link.ts";
+import { renderSidebarCollapseToggle } from "./sidebar-collapse-toggle.ts";
 import { sidebarOnlineCountFor, SidebarOnlineOrder } from "./sidebar-online-order.ts";
 
 const onlineOrders = new WeakMap<
@@ -73,63 +74,58 @@ export function renderAppSidebarOnline(host: AppSidebarRenderHost) {
   );
   return html`
     <section class="sidebar-online" aria-label=${label} data-session-section=${sectionId}>
-      ${renderSidebarSessionSectionHeader({
-        sectionId,
-        draggable: false,
-        onStartDrag: () => undefined,
-        onFinishDrag: () => undefined,
-        content: html`
-          <button
-            type="button"
-            class="sidebar-session-group-toggle"
-            aria-expanded=${String(!collapsed)}
-            aria-label=${label}
-            @click=${() => {
-              if (team) {
-                host.teamOnlineExpanded = collapsed;
-              } else {
-                host.toggleSection(sectionId);
-              }
-            }}
-          >
-            <span class="sidebar-session-group-toggle__lead" aria-hidden="true">
-              <span class="sidebar-session-group-toggle__icon"
-                >${collapsed ? icons.chevronRight : icons.chevronDown}</span
-              >
-            </span>
-            ${renderHoverMarquee(label, "sidebar-recent-sessions__label-text")}
-            ${
-              collapsed
-                ? html`<span class="sidebar-online__facepile">
-                    <openclaw-viewer-facepile
-                      .staticUsers=${onlineUsers}
-                      .maxVisible=${2}
-                    ></openclaw-viewer-facepile>
-                  </span>`
-                : nothing
+      <div class="sidebar-panel-header" @mousedown=${beginNativeWindowDrag}>
+        <button
+          type="button"
+          class="sidebar-session-group-toggle"
+          aria-expanded=${String(!collapsed)}
+          aria-label=${label}
+          @click=${() => {
+            if (team) {
+              host.teamOnlineExpanded = collapsed;
+            } else {
+              host.toggleSection(sectionId);
             }
-          </button>
+          }}
+        >
+          <span class="sidebar-session-group-toggle__lead" aria-hidden="true">
+            <span class="sidebar-session-group-toggle__icon"
+              >${collapsed ? icons.chevronRight : icons.chevronDown}</span
+            >
+          </span>
+          ${renderHoverMarquee(label, "sidebar-recent-sessions__label-text")}
           ${
             collapsed
-              ? nothing
-              : html`<button
-                  type="button"
-                  class="sidebar-session-toolbar__button sidebar-online__filter-toggle sidebar-session-sort ${filtered ? "sidebar-session-sort--filtered" : ""}"
-                  aria-label=${t("presence.filters.label")}
-                  title=${t("presence.filters.label")}
-                  aria-haspopup="dialog"
-                  aria-expanded=${String(host.sidebarMenus.peopleFilterMenuPosition !== null)}
-                  @click=${(event: MouseEvent) => {
-                    if (event.currentTarget instanceof HTMLElement) {
-                      host.sidebarMenus.togglePositionedMenu("peopleFilter", event.currentTarget);
-                    }
-                  }}
-                >
-                  ${icons.listFilter}
-                </button>`
+              ? html`<span class="sidebar-online__facepile">
+                  <openclaw-viewer-facepile
+                    .staticUsers=${onlineUsers}
+                    .maxVisible=${2}
+                  ></openclaw-viewer-facepile>
+                </span>`
+              : nothing
           }
-        `,
-      })}
+        </button>
+        ${
+          collapsed
+            ? nothing
+            : html`<button
+                type="button"
+                class="sidebar-session-toolbar__button sidebar-online__filter-toggle sidebar-session-sort ${filtered ? "sidebar-session-sort--filtered" : ""}"
+                aria-label=${t("presence.filters.label")}
+                title=${t("presence.filters.label")}
+                aria-haspopup="dialog"
+                aria-expanded=${String(host.sidebarMenus.peopleFilterMenuPosition !== null)}
+                @click=${(event: MouseEvent) => {
+                  if (event.currentTarget instanceof HTMLElement) {
+                    host.sidebarMenus.togglePositionedMenu("peopleFilter", event.currentTarget);
+                  }
+                }}
+              >
+                ${icons.listFilter}
+              </button>`
+        }
+        ${renderSidebarCollapseToggle(host)}
+      </div>
       ${
         collapsed
           ? nothing
