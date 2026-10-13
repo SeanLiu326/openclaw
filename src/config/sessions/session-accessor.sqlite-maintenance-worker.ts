@@ -6,6 +6,7 @@ import type { AgentDatabaseRequestExecutionSource } from "../../state/openclaw-a
 import type { SqliteSessionReclamationDiagnostics } from "./session-accessor.sqlite-contract.js";
 import type {
   ReclamationDatabaseOptions,
+  SessionEntryMaintenancePlan,
   SessionMaintenanceLiveProtection,
   SessionMaintenanceMetadataCommand,
   SessionMaintenanceMetadataResult,
@@ -18,6 +19,7 @@ export function runSessionMaintenanceMetadataInWorker(params: {
   plan: SessionMaintenanceMetadataCommand & { databaseOptions: ReclamationDatabaseOptions };
   claim: SqliteReclamationClaim;
   assertCurrent: () => void;
+  assertMaintenanceCommitAllowed?: (plans?: readonly SessionEntryMaintenancePlan[]) => void;
   refreshMaintenanceProtection?: () => SessionMaintenanceLiveProtection;
   signal: AbortSignal;
   diagnostics?: SqliteSessionReclamationDiagnostics;
@@ -57,6 +59,11 @@ export function runSessionMaintenanceMetadataInWorker(params: {
     },
     {
       identityAgentId: plan.databaseOptions.agentId,
+      beforeCommit(publication) {
+        if (plan.kind === "maintenance-plan") {
+          params.assertMaintenanceCommitAllowed?.(publication.maintenancePlans);
+        }
+      },
       onResult(result) {
         const openDatabase = getOpenClawAgentDatabaseIfOpen(plan.databaseOptions);
         const database =

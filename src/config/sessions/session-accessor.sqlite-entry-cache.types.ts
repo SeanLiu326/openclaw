@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { isDeepStrictEqual } from "node:util";
 import type { OpenClawAgentDatabase } from "../../state/openclaw-agent-db-contract.js";
 import { findOpenClawAgentDatabaseIdentity } from "../../state/openclaw-agent-db-identity.js";
+import type { SessionEntryMaintenancePlan } from "./session-accessor.sqlite-lifecycle-types.js";
 import type { SessionEntryMaintenanceAgeChange } from "./session-accessor.sqlite-maintenance-age.js";
 import type { SessionActorHotState } from "./session-actor-state.types.js";
 import type { SessionMembershipFact } from "./session-membership-facts.types.js";
@@ -137,6 +138,7 @@ export type SessionEntryProjectionFacts = {
 };
 
 export type SessionEntryReplacementPublication = {
+  maintenancePlans?: readonly SessionEntryMaintenancePlan[];
   kind: "session-entry-replacements";
   transcriptPublication?: readonly import("./session-transcript-authority.types.js").SessionTranscriptAuthorityReceipt[];
   pendingArchiveRecovery: boolean;

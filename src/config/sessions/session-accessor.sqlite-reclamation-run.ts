@@ -36,6 +36,7 @@ import { publishSessionEntryWorkerInvalidations } from "./session-accessor.sqlit
 import type {
   SessionDeletionPlanningOperation,
   SessionDeletionPlanningResult,
+  SessionEntryMaintenancePlan,
   SessionMaintenanceLiveProtection,
   SessionMaintenanceReadResult,
   SqliteArchiveReclamationPlan,
@@ -131,6 +132,7 @@ export async function runSqliteSessionReclamation(params: {
   diagnostics?: SqliteSessionReclamationDiagnostics;
   assertCommitAllowed?: () => void;
   refreshMaintenanceProtection?: () => SessionMaintenanceLiveProtection;
+  assertMaintenanceCommitAllowed?: (plans?: readonly SessionEntryMaintenancePlan[]) => void;
   consumeReadOnlyMaintenancePlan?: (
     result: Extract<SessionMaintenanceReadResult, { kind: "maintenance-plan" }>,
     assertCurrent: () => void,
@@ -181,7 +183,12 @@ export async function runSqliteSessionReclamation(params: {
           () => {
             params.assertCommitAllowed?.();
             return reclaimSqliteSessionInTransaction(params.plan, {
-              beforeMutation: params.assertCommitAllowed,
+              beforeMutation() {
+                params.assertCommitAllowed?.();
+                if (params.plan.kind === "maintenance-plan") {
+                  params.assertMaintenanceCommitAllowed?.();
+                }
+              },
               onCommit: (database, result) => {
                 // The native connection now sees its own removals; row guards ran before mutation.
                 const publish = prepareReclamationPublication(
@@ -389,6 +396,7 @@ export async function runSqliteSessionReclamation(params: {
             plan,
             claim,
             refreshMaintenanceProtection: params.refreshMaintenanceProtection,
+            assertMaintenanceCommitAllowed: params.assertMaintenanceCommitAllowed,
             assertCurrent: () => {
               assertRequestCurrent();
               claim.assertCurrent();
