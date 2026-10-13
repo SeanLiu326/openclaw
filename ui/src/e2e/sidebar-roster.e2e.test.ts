@@ -281,7 +281,8 @@ suite.define(() => {
           agentId: "main",
           key: "agent:main:main",
         });
-        await page.clock.fastForward(5_001);
+        // Run nested mock response timers so queued reads can acquire bootstrap slots.
+        await page.clock.runFor(5_001);
         await expect.poll(async () => (await activityReads()).length).toBe(initialReads + 1);
         for (let index = 0; index < 3; index += 1) {
           await gateway.emitGatewayEvent("sessions.changed", {
@@ -289,7 +290,7 @@ suite.define(() => {
             key: "agent:main:main",
           });
           // Cross full collection windows while the original server read stays held.
-          await page.clock.fastForward(5_001);
+          await page.clock.runFor(5_001);
           expect(await activityReads()).toHaveLength(initialReads + 1);
         }
         await gateway.resolveDeferred("sessions.list");
@@ -297,7 +298,7 @@ suite.define(() => {
         await sidebar.getByText("Harbor project refreshed", { exact: true }).waitFor();
         await pauseVirtualClock(page);
         // A held read reaches the maximum cooldown before its one trailing refresh.
-        await page.clock.fastForward(15_001);
+        await page.clock.runFor(15_001);
         await expect.poll(async () => (await activityReads()).length).toBe(initialReads + 2);
         await page.clock.resume();
         await expect.poll(() => sessionRows.count()).toBe(8);
