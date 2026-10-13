@@ -24,6 +24,7 @@ import {
   buildMediaGenerationGeometryDetails,
   buildSavedMediaAttachment,
   type MediaGenerateToolExecutionResult,
+  type AcquireGeneratedMediaSandbox,
 } from "./media-generate-result-shared.js";
 import {
   buildMediaReferenceDetails,
@@ -31,7 +32,6 @@ import {
   loadMediaToolReferences,
   resolveMediaToolSandboxConfig,
   type LoadedMediaToolReference,
-  type MediaToolSandbox,
 } from "./media-tool-shared.js";
 
 const GENERATED_VIDEO_MEDIA_SUBDIR = "tool-video-generation";
@@ -95,7 +95,7 @@ type ExecutedVideoGeneration = MediaGenerateToolExecutionResult & {
 export async function executeVideoGenerationJob(params: {
   request: Omit<GenerateVideoParams, "authStore">;
   filename?: string;
-  sandbox?: MediaToolSandbox | null;
+  sandbox?: AcquireGeneratedMediaSandbox;
   loadedReferenceImages: LoadedReferenceAsset[];
   loadedReferenceVideos: LoadedReferenceAsset[];
   taskHandle: MediaGenerationTaskHandle | null;

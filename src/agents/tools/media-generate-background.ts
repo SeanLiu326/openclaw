@@ -25,6 +25,7 @@ import {
   type MediaGenerationExecutionResult,
   type MediaGenerationTaskHandle,
 } from "./media-generate-background-shared.js";
+import type { AcquireGeneratedMediaSandbox } from "./media-generate-result-shared.js";
 import type { MediaGenerateActionResult } from "./media-generate-tool-actions-shared.js";
 import { rethrowAfterMediaCleanup } from "./media-generation-error.js";
 import {
@@ -53,6 +54,7 @@ export type MediaGenerateToolOptions = {
   requesterOrigin?: DeliveryContext;
   inputProvenance?: InputProvenance;
   workspaceDir?: string;
+  spawnWorkspaceDir?: string;
   cwd?: string;
   preparedModelRuntime?: PreparedModelRuntimeSnapshot;
   sandbox?: MediaToolSandbox;
@@ -102,8 +104,36 @@ export function resolveMediaGenerateToolContext<K extends keyof typeof GENERATIO
       toolName: `${GENERATION_LABELS[providerKey]}_generate`,
       onCrash: (message, meta) => logger.error(message, meta),
     });
+  const outputSandbox = options?.sandbox;
+  const acquireOutputSandbox: AcquireGeneratedMediaSandbox | undefined = outputSandbox
+    ? async (assertCurrent) => {
+        assertCurrent();
+        if (!options?.agentSessionKey) {
+          return { ...outputSandbox, [Symbol.dispose]() {} };
+        }
+        // Detached generation outlives the originating turn's workspace projection.
+        const { resolveSandboxContext } = await import("../sandbox/context.js");
+        const sandbox = await resolveSandboxContext({
+          config: cfg,
+          sessionKey: options.agentSessionKey,
+          agentId: options.requesterAgentId,
+          workspaceDir: options.spawnWorkspaceDir ?? options.workspaceDir,
+          assertCurrent,
+        });
+        if (!sandbox?.fsBridge) {
+          sandbox?.[Symbol.dispose]?.();
+          throw new Error("The requesting sandbox is no longer available");
+        }
+        return {
+          root: sandbox.workspaceDir,
+          bridge: sandbox.fsBridge,
+          [Symbol.dispose]: () => sandbox[Symbol.dispose]?.(),
+        };
+      }
+    : undefined;
   return {
     cfg,
+    acquireOutputSandbox,
     preparedProviders,
     workspaceReadiness: captureAgentWorkspaceReadiness(options?.agentSessionKey),
     taskOptions: () => ({

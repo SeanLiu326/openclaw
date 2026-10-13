@@ -266,7 +266,7 @@ export function createMusicGenerateTool(
                       timeoutMs,
                     },
                     filename,
-                    sandbox: sandboxConfig,
+                    sandbox: context.acquireOutputSandbox,
                     loadedReferenceImages,
                     taskHandle,
                     timeoutNormalization: timeout.normalization,

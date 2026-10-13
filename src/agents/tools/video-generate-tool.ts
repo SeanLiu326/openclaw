@@ -476,7 +476,7 @@ export function createVideoGenerateTool(
                       timeoutMs,
                     },
                     filename,
-                    sandbox: sandboxConfig,
+                    sandbox: context.acquireOutputSandbox,
                     loadedReferenceImages,
                     loadedReferenceVideos,
                     taskHandle,

@@ -15,12 +15,12 @@ import {
   buildMediaGenerateToolExecutionResult,
   buildSavedMediaAttachment,
   buildMediaGenerationGeometryDetails,
+  type AcquireGeneratedMediaSandbox,
 } from "./media-generate-result-shared.js";
 import {
   buildMediaReferenceDetails,
   createCapabilityProviderRuntimeDeps,
   type LoadedMediaToolReference,
-  type MediaToolSandbox,
 } from "./media-tool-shared.js";
 
 const DEFAULT_RESOLUTION: ImageGenerationResolution = "1K";
@@ -29,7 +29,7 @@ const GENERATED_IMAGE_MEDIA_SUBDIR = "tool-image-generation";
 export async function executeImageGenerationJob(params: {
   request: Omit<GenerateImageParams, "authStore">;
   filename?: string;
-  sandbox?: MediaToolSandbox | null;
+  sandbox?: AcquireGeneratedMediaSandbox;
   loadedReferenceImages: LoadedMediaToolReference<ImageGenerationSourceImage>[];
   taskHandle: MediaGenerationTaskHandle | null;
   providers: ImageGenerationProvider[];

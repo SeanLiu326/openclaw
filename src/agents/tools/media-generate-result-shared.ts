@@ -25,6 +25,10 @@ export type MediaGenerateToolExecutionResult = MediaGenerationExecutionResult & 
   details: Record<string, unknown>;
 };
 
+export type AcquireGeneratedMediaSandbox = (
+  assertCurrent: () => void,
+) => Promise<(MediaToolSandbox & Disposable) | null>;
+
 export function buildSavedMediaAttachment<T extends "image" | "audio" | "video">(
   type: T,
   media: SavedMedia,
@@ -51,7 +55,7 @@ export async function buildMediaGenerateToolExecutionResult(params: {
   };
   attachments: AgentGeneratedAttachment[];
   mediaUrls: string[];
-  sandbox?: MediaToolSandbox | null;
+  sandbox?: AcquireGeneratedMediaSandbox;
   maxBytes: number;
   messages?: Array<string | null>;
   taskHandle?: { taskId: string; runId: string } | null;
@@ -60,15 +64,26 @@ export async function buildMediaGenerateToolExecutionResult(params: {
   const { result, attachments, mediaUrls } = params;
   const sandboxPaths: string[] = [];
   const stagingMessages: string[] = [];
-  if (params.sandbox) {
-    const { root, bridge } = params.sandbox;
-    const assertSourceCurrent = captureAgentToolSourceExecutionGuard();
-    const assertCurrent = () => {
-      assertSourceCurrent();
-      if (params.taskHandle && !isMediaGenerationOperationCurrent(params.taskHandle.runId)) {
-        throw new Error("Media generation task is no longer active");
-      }
-    };
+  const assertSourceCurrent = captureAgentToolSourceExecutionGuard();
+  const assertCurrent = () => {
+    assertSourceCurrent();
+    if (params.taskHandle && !isMediaGenerationOperationCurrent(params.taskHandle.runId)) {
+      throw new Error("Media generation task is no longer active");
+    }
+  };
+  const reportStagingFailure = (error: unknown) => {
+    stagingMessages.push(
+      `Sandbox copy unavailable: ${sanitizeGeneratedMediaDisplayText(String(error))}`,
+    );
+  };
+  using sandbox = attachments.some((attachment) => attachment.path)
+    ? await params.sandbox?.(assertCurrent).catch((error: unknown) => {
+        reportStagingFailure(error);
+        return null;
+      })
+    : undefined;
+  if (sandbox) {
+    const { root, bridge } = sandbox;
     const directory = stagedInputDirectory(randomUUID());
     let ready = false;
     for (const attachment of attachments) {
@@ -104,9 +119,7 @@ export async function buildMediaGenerateToolExecutionResult(params: {
         sandboxPaths.push(filePath);
         stagingMessages.push(`Sandbox file: ${JSON.stringify(filePath)}`);
       } catch (error) {
-        stagingMessages.push(
-          `Sandbox copy unavailable: ${sanitizeGeneratedMediaDisplayText(String(error))}`,
-        );
+        reportStagingFailure(error);
       }
     }
   }

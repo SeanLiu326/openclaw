@@ -3,9 +3,14 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAutoCleanupTempDirTracker } from "../../../test/helpers/temp-dir.js";
 import { STAGED_INPUT_GITIGNORE } from "../../media/staged-inputs.js";
+import { createSandboxTestContext } from "../sandbox/test-fixtures.js";
 import { createHostSandboxFsBridge } from "../test-helpers/host-sandbox-fs-bridge.js";
+import { resolveMediaGenerateToolContext } from "./media-generate-background.js";
 import { buildMediaGenerateToolExecutionResult } from "./media-generate-result-shared.js";
 import { loadMediaToolReferences } from "./media-tool-shared.js";
+
+const { resolveSandboxContext } = vi.hoisted(() => ({ resolveSandboxContext: vi.fn() }));
+vi.mock("../sandbox/context.js", () => ({ resolveSandboxContext }));
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 const png = Buffer.from(
@@ -20,6 +25,7 @@ async function fixture() {
   const mediaPath = path.join(root, "image.png");
   await fs.writeFile(mediaPath, png);
   const sandbox = { root: workspace, bridge: createHostSandboxFsBridge(workspace) };
+  const acquireSandbox = async () => ({ ...sandbox, [Symbol.dispose]() {} });
   const params = {
     kind: "image" as const,
     result: { provider: "test", model: "test", attempts: [] },
@@ -28,14 +34,17 @@ async function fixture() {
     maxBytes: 1024,
     details: {},
   };
-  return { root, workspace, mediaPath, sandbox, params };
+  return { root, workspace, mediaPath, sandbox, acquireSandbox, params };
 }
 
 describe("generated media sandbox access", () => {
   it("stages only the current outputs for follow-up references and retains delivery paths", async () => {
-    const { root, workspace, mediaPath, sandbox, params } = await fixture();
+    const { root, workspace, mediaPath, sandbox, acquireSandbox, params } = await fixture();
     await fs.writeFile(path.join(root, "other-session.png"), png);
-    const result = await buildMediaGenerateToolExecutionResult({ ...params, sandbox });
+    const result = await buildMediaGenerateToolExecutionResult({
+      ...params,
+      sandbox: acquireSandbox,
+    });
     const [relativePath] = result.details.sandboxPaths as string[];
     if (!relativePath) {
       throw new Error("Expected a sandbox path for the generated image");
@@ -67,7 +76,7 @@ describe("generated media sandbox access", () => {
   });
 
   it("leaves non-sandboxed results and remote-only video outputs unchanged", async () => {
-    const { workspace, sandbox, params } = await fixture();
+    const { workspace, acquireSandbox, params } = await fixture();
     const result = await buildMediaGenerateToolExecutionResult(params);
     expect(result.details.sandboxPaths).toBeUndefined();
     expect(result.contentText).not.toContain("Sandbox");
@@ -76,7 +85,7 @@ describe("generated media sandbox access", () => {
     const remote = await buildMediaGenerateToolExecutionResult({
       ...params,
       kind: "video",
-      sandbox,
+      sandbox: acquireSandbox,
       attachments: [{ type: "video", url }],
       mediaUrls: [url],
     });
@@ -88,7 +97,7 @@ describe("generated media sandbox access", () => {
   it.each(["size limit", "read-only workspace"])(
     "keeps delivery and reports unavailable copies on %s",
     async (failure) => {
-      const { workspace, sandbox, params } = await fixture();
+      const { workspace, sandbox, acquireSandbox, params } = await fixture();
       if (failure === "read-only workspace") {
         vi.spyOn(sandbox.bridge, "createFileExclusive").mockRejectedValue(
           new Error("Sandbox path is read-only"),
@@ -96,7 +105,7 @@ describe("generated media sandbox access", () => {
       }
       const result = await buildMediaGenerateToolExecutionResult({
         ...params,
-        sandbox,
+        sandbox: acquireSandbox,
         maxBytes: failure === "size limit" ? 1 : params.maxBytes,
       });
       expect(result.attachments).toEqual(params.attachments);
@@ -106,4 +115,55 @@ describe("generated media sandbox access", () => {
       await expect(fs.readdir(workspace)).resolves.toEqual([]);
     },
   );
+
+  it("reacquires and releases the sandbox after the originating projection closes", async () => {
+    const { workspace, sandbox, params } = await fixture();
+    const originalWrite = vi
+      .spyOn(sandbox.bridge, "createFileExclusive")
+      .mockRejectedValue(new Error("Originating projection has closed"));
+    const dispose = vi.fn();
+    resolveSandboxContext.mockResolvedValue(
+      createSandboxTestContext({
+        overrides: {
+          workspaceDir: workspace,
+          fsBridge: createHostSandboxFsBridge(workspace),
+          [Symbol.dispose]: dispose,
+        },
+      }),
+    );
+    const context = resolveMediaGenerateToolContext(
+      "imageGenerationProviders",
+      {
+        config: {},
+        agentSessionKey: "agent:main:generated",
+        requesterAgentId: "main",
+        workspaceDir: "/closed/projection",
+        spawnWorkspaceDir: "/canonical/worktree",
+        sandbox,
+      },
+      { warn: vi.fn(), error: vi.fn() },
+      true,
+    );
+    if (!context) {
+      throw new Error("Expected a media tool context");
+    }
+    const result = await buildMediaGenerateToolExecutionResult({
+      ...params,
+      sandbox: context.acquireOutputSandbox,
+    });
+    expect(resolveSandboxContext).toHaveBeenCalledWith({
+      config: {},
+      sessionKey: "agent:main:generated",
+      agentId: "main",
+      workspaceDir: "/canonical/worktree",
+      assertCurrent: expect.any(Function),
+    });
+    const [relativePath] = result.details.sandboxPaths as string[];
+    if (!relativePath) {
+      throw new Error("Expected a sandbox path after reacquisition");
+    }
+    await expect(fs.readFile(path.join(workspace, relativePath))).resolves.toEqual(png);
+    expect(originalWrite).not.toHaveBeenCalled();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
 });
