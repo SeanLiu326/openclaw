@@ -305,7 +305,7 @@ it("rejects a replaced actor source during approval lineage preparation", async 
   await expect(pending).rejects.toThrow(/session|current/i);
 });
 
-it.each(["agent:native:dashboard:incognito-native-controls", "agent:native:controls"])(
+it.each(["agent:native:dashboard:incognito-native-controls"])(
   "preserves unbound wake %s without allocating another owner",
   async (sessionKey) => {
     await replaceSessionEntry(

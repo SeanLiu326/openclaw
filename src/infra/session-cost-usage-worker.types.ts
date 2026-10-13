@@ -78,6 +78,8 @@ export type UsageCostWorkerInput = {
   kind: "usage-cost";
   location: UsageCostWorkerLocation;
   databases: UsageCostWorkerDatabase[];
+  /** Archive metadata discovery shares the roster captured before database custody. */
+  archiveStorePaths: string[];
   operation: UsageCostWorkerOperation;
 };
 

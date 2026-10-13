@@ -62,6 +62,7 @@ export type PreparedUsageCostWorker = {
   config?: OpenClawConfig;
   agentDir: string;
   databases: Array<OpenClawAgentDatabaseOptions & { agentId: string; path: string }>;
+  archiveStorePaths: string[];
   sessionActor?: SessionActorStorageBinding;
   memory?: NonNullable<ReturnType<typeof captureSessionActorStorageOwner>>;
 };
@@ -105,6 +106,7 @@ export function prepareUsageCostWorker(params: {
       config: params.config,
       agentDir: params.agentDir ?? resolveAgentDir(params.config ?? {}, memory.agentId),
       databases: [],
+      archiveStorePaths: [],
       sessionActor: memory.binding,
       memory,
     };
@@ -132,9 +134,10 @@ export function prepareUsageCostWorker(params: {
     databases.set(JSON.stringify([prepared.agentId, prepared.path]), prepared);
   };
   add({ agentId, path: databasePath, env });
+  const archiveStorePaths = listDurableSqliteTargetPathsForSessionStorePath(storePath);
   const targets = [
     { agentId, storePath },
-    ...listDurableSqliteTargetPathsForSessionStorePath(storePath).map((targetPath) => ({
+    ...archiveStorePaths.map((targetPath) => ({
       agentId,
       storePath: targetPath,
     })),
@@ -165,6 +168,7 @@ export function prepareUsageCostWorker(params: {
     config: params.config,
     agentDir: params.agentDir ?? resolveAgentDir(params.config ?? {}, agentId),
     databases: [...databases.values()],
+    archiveStorePaths,
   };
 }
 
@@ -251,6 +255,7 @@ async function runPreparedUsageCostWorker(
   operation: UsageCostWorkerRequest,
 ): Promise<UsageCostWorkerResult | { kind: "busy" }> {
   const location = structuredClone(prepared.location);
+  const archiveStorePaths = [...prepared.archiveStorePaths];
   const capturedOperation = structuredClone(operation);
   const signal = getAsyncWorkSignal();
   return withSessionCostUsageWorkerDatabases(prepared.databases, async (scope) => {
@@ -322,11 +327,13 @@ async function runPreparedUsageCostWorker(
           location,
           operation: workerOperation,
           databases: [],
+          archiveStorePaths,
         },
         {
           signal,
           beforeDispatch: assertCurrent,
-          inputBytes: 2 * JSON.stringify({ location, operation: workerOperation }).length,
+          inputBytes:
+            2 * JSON.stringify({ location, operation: workerOperation, archiveStorePaths }).length,
           timeoutMs: USAGE_COST_WORKER_TIMEOUT_MS,
           onRequest: async (value, context) => {
             let reply: UsageCostWorkerHostReply;
