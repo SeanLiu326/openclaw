@@ -423,7 +423,7 @@ if (parentPort && workerData?.openclawDatabaseBackup === true) {
           .digest("hex"),
       );
     }
-    return control.runNativeSection(() =>
+    return control.runNativeSection<BackupReply>(() =>
       task.operation === "capture"
         ? capturePostgresBackupInWorker({ ...task.params, assertCurrent: control.throwIfCancelled })
         : preparePostgresRestoreInWorker({

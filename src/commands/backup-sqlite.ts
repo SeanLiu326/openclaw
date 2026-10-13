@@ -3,6 +3,7 @@ import path from "node:path";
 import { resolveConfiguredAgentId } from "../agents/agent-scope-config.js";
 import { captureRuntimeConfigAsyncReader, resolveStateDir } from "../config/config.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { isSqliteCorruptionError } from "../infra/sqlite-error-diagnostics.js";
 import { assertNotUpdateCapturePath } from "../infra/update-capture-paths.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { type RuntimeEnv, writeRuntimeJson } from "../runtime.js";
@@ -35,7 +36,16 @@ export async function backupSqliteCreateCommand(
   const repositoryPath = resolveRequiredBackupPath(options.repository, "--repository");
   try {
     const database = await resolveSnapshotDatabase(options);
-    if (readBackupEngine(database.path).engine === "postgres") {
+    let postgres = false;
+    try {
+      postgres = readBackupEngine(database.path).engine === "postgres";
+    } catch (error) {
+      if (!isSqliteCorruptionError(error)) {
+        throw error;
+      }
+      // Preserve the native snapshot owner's corruption diagnostics and cleanup.
+    }
+    if (postgres) {
       throw new Error(
         "backup sqlite cannot copy a PostgreSQL anchor. Use openclaw backup create; stop through the service owner, then rerun.",
       );
