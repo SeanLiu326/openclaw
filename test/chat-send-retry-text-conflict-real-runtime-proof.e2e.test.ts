@@ -183,9 +183,7 @@ describe("chat.send same-ID retry input comparison across a real gateway restart
             proof("provider_request_observed", {
               index: requests.length,
               model: parsed.model,
-              sawOriginal: requests[requests.length - 1]!.allUserText.includes(
-                ORIGINAL_MESSAGE,
-              ),
+              sawOriginal: requests[requests.length - 1]!.allUserText.includes(ORIGINAL_MESSAGE),
               sawEdited: requests[requests.length - 1]!.allUserText.includes(EDITED_MESSAGE),
             });
             if (holdNext) {
