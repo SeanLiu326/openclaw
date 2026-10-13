@@ -1,4 +1,4 @@
-import { createMemo, createUniqueId, Show } from "solid-js";
+import { createEffect, createMemo, createUniqueId, Show } from "solid-js";
 import type { BoardTab } from "../../lib/board/types.ts";
 import { t } from "../../lib/reactive/i18n.ts";
 import { Menu } from "../solid/menu.tsx";
@@ -29,10 +29,25 @@ export function BoardTabs(props: {
     const visibleIds = new Set(visible().map((tab) => tab.tabId));
     return props.tabs.filter((tab) => !visibleIds.has(tab.tabId));
   });
+  let track: HTMLDivElement | undefined;
+  const layoutKey = createMemo(() =>
+    JSON.stringify([props.activeTabId, visible().map((tab) => tab.tabId)]),
+  );
+  createEffect(layoutKey, () => {
+    // Read selection after the keyed tab items have committed.
+    queueMicrotask(() =>
+      track
+        ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+        ?.scrollIntoView?.({ block: "nearest", inline: "nearest" }),
+    );
+  });
   return (
     <Show when={props.tabs.length > 1}>
       <nav class="board-tabs" aria-label={t("board.tabsLabel")}>
         <Tabs
+          ref={(element) => {
+            track = element;
+          }}
           class="board-tabs__track"
           active={props.activeTabId}
           activation="manual"

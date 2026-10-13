@@ -86,6 +86,43 @@ afterEach(() => {
 });
 
 describe.skipIf(!hasBrowserLayout)("openclaw-board-view browser layout", () => {
+  it("keeps the overflow-selected tab visible without moving focus from More", async () => {
+    const { page } = await import("vitest/browser");
+    const view = await mount();
+    view.style.width = "340px";
+    view.snapshot = {
+      ...structuredClone(source),
+      tabs: Array.from({ length: 8 }, (_, index) => ({
+        tabId: `tab-${index}`,
+        title: `Research area ${index + 1}`,
+        position: index,
+        chatDock: "right" as const,
+      })),
+      widgets: [],
+    };
+    view.activeTabId = "tab-0";
+    view.callbacks = { ...view.callbacks!, selectTab: (tabId) => (view.activeTabId = tabId) };
+    await view.updateComplete;
+    const track = view.querySelector<HTMLElement>(".board-tabs__track")!;
+    expect(track.scrollWidth).toBeGreaterThan(track.clientWidth);
+    const trigger = view.querySelector<HTMLButtonElement>(".board-tabs__overflow-trigger")!;
+    await page.elementLocator(trigger).click();
+    await page.getByRole("menuitem", { name: "Research area 8", exact: true }).click();
+    await vi.waitFor(() => {
+      const selected = view.querySelector<HTMLElement>('[data-board-tab-id="tab-7"]')!;
+      expect(selected.getAttribute("aria-selected")).toBe("true");
+      const bounds = track.getBoundingClientRect();
+      const tab = selected.getBoundingClientRect();
+      expect(tab.left).toBeGreaterThanOrEqual(bounds.left - 1);
+      expect(tab.right).toBeLessThanOrEqual(bounds.right + 1);
+    });
+    expect(document.activeElement).toBe(trigger);
+    track.scrollLeft = 0;
+    view.snapshot = { ...view.snapshot!, revision: 2 };
+    await view.updateComplete;
+    expect(track.scrollLeft).toBe(0);
+  });
+
   it.each(["switch", "move"])("retains loaded widget state during %s", async (action) => {
     const view = await mount();
     const cell = view.querySelector("openclaw-board-widget-cell")!;
