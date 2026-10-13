@@ -98,7 +98,10 @@ suite.define(() => {
           path: groupCwd,
           parent: "/home/peter",
           home: "/home/peter",
-          entries: [],
+          entries: Array.from({ length: 12 }, (_, index) => ({
+            name: `project-${index + 1}`,
+            path: `${groupCwd}/project-${index + 1}`,
+          })),
         },
         "sessions.create": { key: "agent:main:client-work", runStarted: true },
         "sessions.list": sessionsListResponse([]),
@@ -165,7 +168,7 @@ suite.define(() => {
         await page.setViewportSize(viewport);
         await expect
           .poll(async () => {
-            const bounds = await folderPicker.locator(".new-session-page__browser").boundingBox();
+            const bounds = await folderPicker.boundingBox();
             return {
               horizontal: Boolean(
                 bounds && bounds.x >= 0 && bounds.x + bounds.width <= viewport.width,
@@ -176,6 +179,24 @@ suite.define(() => {
             };
           })
           .toEqual({ horizontal: true, vertical: true });
+        if (viewport.name === "landscape") {
+          await folderPicker.locator(".new-session-page__browser-head").hover();
+          await page.mouse.wheel(0, 600);
+          await expect
+            .poll(async () => {
+              const panel = await folderPicker.boundingBox();
+              const action = await folderPicker
+                .getByRole("button", { name: "Use this folder" })
+                .boundingBox();
+              return Boolean(
+                panel &&
+                action &&
+                action.y >= panel.y &&
+                action.y + action.height <= panel.y + panel.height,
+              );
+            })
+            .toBe(true);
+        }
         await captureUiProof(suite, page, `group-defaults-folder-picker-${viewport.name}.png`);
       }
       await folderPicker.getByRole("button", { name: "Use this folder" }).click();
