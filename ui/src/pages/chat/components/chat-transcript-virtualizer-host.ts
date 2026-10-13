@@ -665,26 +665,6 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
     return true;
   }
 
-  private completeMessageReveal(): void {
-    const command = this.offsetState.scrollCommand;
-    if (command?.target !== "message") {
-      return;
-    }
-    const virtualizer = this.virtualizer;
-    if (this.messageReveal.reveal(this.threadInnerElement, command, virtualizer)) {
-      this.offsetState.scrollCommand = { behavior: command.behavior, target: "index" };
-      return;
-    }
-    // Expanding folded work can move the target beyond the initially mounted rows.
-    const rowKey = this.messageRowKeysById.get(command.messageId);
-    const rowIndex = rowKey ? this.rowIndexesByKey.get(rowKey) : undefined;
-    if (rowIndex !== undefined) {
-      // Native scroll and row mounts continue the reveal. Requesting another
-      // render here can starve the offset notification that changes the range.
-      virtualizer.scrollToIndex(rowIndex, { align: "center" });
-    }
-  }
-
   setContentReady(ready: boolean): void {
     this.contentReady = ready;
   }
@@ -758,7 +738,13 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
     if (!this.connected) {
       return;
     }
-    this.completeMessageReveal();
+    this.messageReveal.complete(
+      this.threadInnerElement,
+      this.offsetState,
+      this.virtualizer,
+      this.messageRowKeysById,
+      this.rowIndexesByKey,
+    );
     if (!this.initialPositionPending || !this.rowKeys.length || !this.scrollElement?.clientHeight) {
       return;
     }
