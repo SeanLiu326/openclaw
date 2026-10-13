@@ -243,22 +243,30 @@ export function startGatewayEventSubscriptions(params: GatewayEventSubscriptionP
       const observedAt = entry.projectSessionTerminalObservedAt;
       const recoveryCandidate =
         entry.controlUiVisible !== false && lifecycleGeneration && sessionKey && sessionId
-          ? { runId: candidateRunId, lifecycleGeneration, sessionKey, sessionId, observedAt }
+          ? {
+              runId: candidateRunId,
+              ...(candidateRunId !== run.runId ? { sourceRunId: run.runId } : {}),
+              lifecycleGeneration,
+              sessionKey,
+              sessionId,
+              observedAt,
+            }
           : undefined;
-      // Capture interruption custody while this registration is live; its write can outlast removal.
-      if (run.preserveRestartRecovery && recoveryCandidate) {
+      // Capture custody before the accepted write can outlast this registration.
+      if (recoveryCandidate) {
         params.restartRecoveryCandidates.set(candidateRunId, recoveryCandidate);
       }
       const settle = (persisted: boolean, error?: unknown) => {
+        if (
+          persisted &&
+          !run.preserveRestartRecovery &&
+          recoveryCandidate &&
+          params.restartRecoveryCandidates.get(candidateRunId) === recoveryCandidate
+        ) {
+          params.restartRecoveryCandidates.delete(candidateRunId);
+        }
         if (entry.projectSessionTerminalPersistence !== run.persistence) {
           return;
-        }
-        if (params.chatAbortControllers.get(candidateRunId) === entry) {
-          if (persisted && !run.preserveRestartRecovery) {
-            params.restartRecoveryCandidates.delete(candidateRunId);
-          } else if (!run.preserveRestartRecovery && recoveryCandidate) {
-            params.restartRecoveryCandidates.set(candidateRunId, recoveryCandidate);
-          }
         }
         // Captured drain targets still need final facts after registry retirement.
         settleTrackedTerminalEntry(candidateRunId, entry, persisted, error);

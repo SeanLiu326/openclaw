@@ -34,18 +34,19 @@ import {
 import { bindGatewayContextResolver } from "../plugins/runtime/gateway-request-scope.js";
 import { beginSessionWorkAdmission } from "../sessions/session-lifecycle-admission.js";
 import {
+  createGatewaySchedulerClock,
+  createTestGatewayScheduler,
+} from "../test-utils/gateway-scheduler-clock.js";
+import {
   createOpenClawTestState,
   type OpenClawTestState,
 } from "../test-utils/openclaw-test-state.js";
 import { waitForChatAbortTerminalPersistence } from "./chat-abort-lifecycle-internal.js";
-import {
-  registerChatAbortController,
-  removeChatAbortControllerEntry,
-  type ChatAbortControllerEntry,
-} from "./chat-abort.js";
+import { registerChatAbortController, type ChatAbortControllerEntry } from "./chat-abort.js";
 import { registerQueuedChatTurn, type QueuedChatTurnMap } from "./chat-queued-turns.js";
 import { createAgentEventTestHarness } from "./server-chat.agent-events.test-harness.js";
 import { subscribeAgentEvents } from "./server-chat.agent-events.test-helpers.js";
+import { startGatewayMaintenanceTimers } from "./server-maintenance.js";
 import { resolveVisibleActiveSessionRunState } from "./server-methods/session-active-runs.js";
 import { createMockGatewayRecoveryRuntime } from "./server-recovery-runtime.test-support.js";
 import { prepareGatewayRunShutdown } from "./server-run-shutdown.js";
@@ -57,6 +58,7 @@ import {
 import { persistGatewaySessionLifecycleEvent } from "./session-lifecycle-state.js";
 import { projectGatewaySessionActiveRun } from "./session-utils-display.js";
 import { buildGatewaySessionRow } from "./session-utils-row.js";
+import { createGatewayMaintenanceStateForTest } from "./test-helpers.maintenance-state.js";
 
 const cfg = { agents: { entries: { main: {} } } };
 let state: OpenClawTestState;
@@ -329,19 +331,39 @@ it.each(["admission", "queue", "delegated"] as const)(
   },
 );
 
-it.each(["interrupted", "retired while persisting", "completed", "replacement"] as const)(
-  "retains only interrupted terminal custody before shutdown marking: %s",
-  async (outcome) => {
-    const sessionKey = `agent:main:dashboard:persisted-terminal-${outcome}`;
-    const sessionId = `persisted-terminal-${outcome}`;
+it.each(
+  (
+    [
+      "interrupted",
+      "retired while persisting",
+      "completed",
+      "completed while retired",
+      "replacement",
+    ] as const
+  ).flatMap((outcome) => [
+    { outcome, aliased: false },
+    { outcome, aliased: true },
+  ]),
+)(
+  "retains only interrupted terminal custody before shutdown marking: $outcome, aliased=$aliased",
+  async ({ outcome, aliased }) => {
+    const completed = outcome === "completed" || outcome === "completed while retired";
+    const retireWhilePersisting =
+      outcome === "retired while persisting" || outcome === "completed while retired";
+    const sessionKey = `agent:main:dashboard:persisted-terminal-${outcome}-${aliased}`;
+    const sessionId = `persisted-terminal-${outcome}-${aliased}`;
     const runId = `${sessionId}-run`;
+    const clientRunId = aliased ? `${runId}-client` : runId;
     const target = { storePath, sessionKey };
     const subscriptionConfig = { ...cfg, logging: { audit: { enabled: false } } };
     setRuntimeConfigSnapshot(subscriptionConfig, subscriptionConfig);
     await replaceSessionEntry(target, { sessionId, updatedAt: 1, lifecycleRunId: runId });
     const params = createSubscriptionTestFixture().createParams();
+    const clock = createGatewaySchedulerClock(Date.now());
+    params.scheduler = createTestGatewayScheduler(clock.clock);
+    params.chatRunState.registry.add(runId, { sessionKey, clientRunId });
     const registration = registerSubscriptionChatRun(params, {
-      runId,
+      runId: clientRunId,
       sessionKey,
       sessionId,
       agentId: "main",
@@ -356,18 +378,17 @@ it.each(["interrupted", "retired while persisting", "completed", "replacement"] 
     const writeEntered = createDeferred();
     const releaseWrite = createDeferred();
     const patch = sessionAccessor.patchSessionEntryTarget;
-    const heldWrite =
-      outcome === "retired while persisting"
-        ? vi
-            .spyOn(sessionAccessor, "patchSessionEntryTarget")
-            .mockImplementationOnce(async (...args) => {
-              writeEntered.resolve();
-              await releaseWrite.promise;
-              return patch(...args);
-            })
-        : undefined;
+    const heldWrite = retireWhilePersisting
+      ? vi
+          .spyOn(sessionAccessor, "patchSessionEntryTarget")
+          .mockImplementationOnce(async (...args) => {
+            writeEntered.resolve();
+            await releaseWrite.promise;
+            return patch(...args);
+          })
+      : undefined;
     try {
-      if (outcome !== "completed") {
+      if (!completed) {
         registration.controller.abort(createAgentRunRestartAbortError());
       }
       emitAgentEvent({
@@ -378,24 +399,36 @@ it.each(["interrupted", "retired while persisting", "completed", "replacement"] 
         stream: "lifecycle",
         data: {
           phase: "end",
-          ...(outcome !== "completed" ? { aborted: true, stopReason: "restart" } : {}),
+          ...(!completed ? { aborted: true, stopReason: "restart" } : {}),
         },
       });
       registration.cleanup();
       if (heldWrite) {
         await writeEntered.promise;
-        // Retiring this exact registration must not discard its accepted interruption write.
-        expect(
-          removeChatAbortControllerEntry(params.chatAbortControllers, runId, registration.entry),
-        ).toBe(true);
+        registration.entry.expiresAtMs = clock.clock.now() - 1;
+        const timers = startGatewayMaintenanceTimers({
+          ...createGatewayMaintenanceStateForTest(),
+          ...params,
+        });
+        try {
+          await clock.advanceBy(60_000);
+          expect(params.chatAbortControllers.has(clientRunId)).toBe(false);
+          expect(params.restartRecoveryCandidates.get(clientRunId)).toMatchObject({
+            runId: clientRunId,
+            ...(aliased ? { sourceRunId: runId } : {}),
+          });
+        } finally {
+          await timers.stopPeriodicTasks();
+          await timers.skillUsageCleanup();
+        }
         releaseWrite.resolve();
       }
       await waitForChatAbortTerminalPersistence(registration.entry);
-      expect(params.chatAbortControllers.has(runId)).toBe(false);
+      expect(params.chatAbortControllers.has(clientRunId)).toBe(false);
       expect(loadSessionEntry(target)).toMatchObject({
-        status: outcome === "completed" ? "done" : "interrupted",
-        abortedLastRun: outcome !== "completed",
-        lastRunId: runId,
+        status: completed ? "done" : "interrupted",
+        abortedLastRun: !completed,
+        lastRunId: clientRunId,
       });
 
       await prepareGatewayRunShutdown({
@@ -441,12 +474,22 @@ it.each(["interrupted", "retired while persisting", "completed", "replacement"] 
           status: "interrupted",
           abortedLastRun: true,
           mainRestartRecovery: { cycleId: expect.any(String), revision: expect.any(Number) },
-          restartRecoveryRuns: [{ runId, lifecycleGeneration: getAgentEventLifecycleGeneration() }],
         });
+        expect(saved?.restartRecoveryRuns).toEqual([
+          { runId, lifecycleGeneration: getAgentEventLifecycleGeneration() },
+          ...(aliased
+            ? [{ runId: clientRunId, lifecycleGeneration: getAgentEventLifecycleGeneration() }]
+            : []),
+        ]);
       } else {
         expect(saved?.mainRestartRecovery).toBeUndefined();
-        if (outcome === "completed") {
-          expect(saved).toMatchObject({ status: "done", abortedLastRun: false, lastRunId: runId });
+        if (completed) {
+          expect(params.restartRecoveryCandidates.has(clientRunId)).toBe(false);
+          expect(saved).toMatchObject({
+            status: "done",
+            abortedLastRun: false,
+            lastRunId: clientRunId,
+          });
         } else {
           expect(saved?.lifecycleRunId).toBe(replacementRunId);
         }

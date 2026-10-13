@@ -243,7 +243,7 @@ export async function markRestartAbortedMainSessions(params: {
                     entry.lastRunId === run.runId &&
                     entry.restartRecoveryRuns?.some(
                       (fence) =>
-                        fence.runId === run.runId &&
+                        fence.runId === (run.sourceRunId ?? run.runId) &&
                         fence.lifecycleGeneration === run.lifecycleGeneration,
                     )) ||
                   run.observedAt === undefined ||
