@@ -285,7 +285,7 @@ suite.define(() => {
         await expect.poll(() => catalogMenu().count()).toBe(1);
         await expect.poll(menuValues).toEqual(["viewer", "import", "terminal"]);
         await expect
-          .poll(() => catalogMenu().locator('[value="terminal"]').getAttribute("disabled"))
+          .poll(() => catalogMenu().locator('[data-value="terminal"]').getAttribute("disabled"))
           .toBeNull();
         console.info(`[catalog-menu-proof] ${entryPoint} values=${(await menuValues()).join(",")}`);
         if (proofDir) {

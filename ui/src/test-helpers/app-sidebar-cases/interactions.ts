@@ -429,6 +429,9 @@ describe("AppSidebar catalog session rows", () => {
       await sidebar.updateComplete;
       expect(sidebar.querySelector("openclaw-catalog-session-menu")).not.toBeNull();
       expect(keyboardContextMenu.defaultPrevented).toBe(true);
+      sidebar.dismissTransientMenus();
+      await sidebar.updateComplete;
+      expect(sidebar.querySelector("openclaw-catalog-session-menu")).toBeNull();
     } finally {
       vi.useRealTimers();
     }
