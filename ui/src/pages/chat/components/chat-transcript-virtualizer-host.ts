@@ -355,6 +355,10 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
     }
     if (!this.initialPositionPending || (this.contentReady && this.rowKeys.length === 0)) {
       applyPendingScrollOffset(this.scrollRestoreHost);
+      if (this.initialPositionPending) {
+        this.initialPositionPending = false;
+        this.renderer.syncInitialPosition();
+      }
     }
     this.queueLayout();
     // Disclosure measurement owns this commit; its sizer lands on the next update.
@@ -556,6 +560,14 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
 
   get isProgrammaticScroll(): boolean {
     return isTranscriptProgrammaticScroll(this.offsetState, this.scrollElement);
+  }
+
+  get isPositionSettled(): boolean {
+    return (
+      this.contentReady &&
+      !this.initialPositionPending &&
+      this.offsetState.pendingScrollOffset === null
+    );
   }
 
   private canAutoFollow(): boolean {
