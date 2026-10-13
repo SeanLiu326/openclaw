@@ -483,6 +483,7 @@ export function createImageGenerateTool(
                       ssrfPolicy: remoteMediaSsrfPolicy,
                     },
                     filename,
+                    sandbox: sandboxConfig,
                     loadedReferenceImages,
                     taskHandle,
                     providers: imageGenerationProviders,

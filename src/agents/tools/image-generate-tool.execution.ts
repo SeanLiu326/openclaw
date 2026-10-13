@@ -20,6 +20,7 @@ import {
   buildMediaReferenceDetails,
   createCapabilityProviderRuntimeDeps,
   type LoadedMediaToolReference,
+  type MediaToolSandbox,
 } from "./media-tool-shared.js";
 
 const DEFAULT_RESOLUTION: ImageGenerationResolution = "1K";
@@ -28,6 +29,7 @@ const GENERATED_IMAGE_MEDIA_SUBDIR = "tool-image-generation";
 export async function executeImageGenerationJob(params: {
   request: Omit<GenerateImageParams, "authStore">;
   filename?: string;
+  sandbox?: MediaToolSandbox | null;
   loadedReferenceImages: LoadedMediaToolReference<ImageGenerationSourceImage>[];
   taskHandle: MediaGenerationTaskHandle | null;
   providers: ImageGenerationProvider[];
@@ -61,11 +63,13 @@ export async function executeImageGenerationJob(params: {
     .map((image) => image.revisedPrompt?.trim())
     .filter((entry): entry is string => Boolean(entry));
   const attachments = savedImages.map((image) => buildSavedMediaAttachment("image", image));
-  const execution = buildMediaGenerateToolExecutionResult({
+  const execution = await buildMediaGenerateToolExecutionResult({
     kind: "image",
     result,
     attachments,
     mediaUrls: savedImages.map((media) => media.path),
+    sandbox: params.sandbox,
+    maxBytes: resolveGeneratedMediaMaxBytes(request.cfg, "image"),
     taskHandle: params.taskHandle,
     details: {
       ...buildMediaReferenceDetails(params.loadedReferenceImages, "image"),

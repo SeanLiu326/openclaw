@@ -25,6 +25,7 @@ import {
   buildMediaReferenceDetails,
   createCapabilityProviderRuntimeDeps,
   type LoadedMediaToolReference,
+  type MediaToolSandbox,
 } from "./media-tool-shared.js";
 
 const log = createSubsystemLogger("agents/tools/music-generate");
@@ -71,6 +72,7 @@ export function normalizeMusicGenerationTimeoutMs(timeoutMs: number | undefined)
 export async function executeMusicGenerationJob(params: {
   request: Omit<GenerateMusicParams, "authStore"> & { timeoutMs: number };
   filename?: string;
+  sandbox?: MediaToolSandbox | null;
   loadedReferenceImages: LoadedMediaToolReference<MusicGenerationSourceImage>[];
   taskHandle: MediaGenerationTaskHandle | null;
   timeoutNormalization?: MusicGenerationTimeoutNormalization;
@@ -145,6 +147,8 @@ export async function executeMusicGenerationJob(params: {
     result,
     attachments,
     mediaUrls: savedTracks.map((media) => media.path),
+    sandbox: params.sandbox,
+    maxBytes: resolveGeneratedMediaMaxBytes(request.cfg, "audio"),
     messages,
     taskHandle: params.taskHandle,
     details: {

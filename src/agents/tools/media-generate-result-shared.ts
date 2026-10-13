@@ -1,12 +1,23 @@
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { asFiniteNumber } from "@openclaw/normalization-core/number-coercion";
 import type { MediaGenerationNormalizationMetadataInput } from "../../../packages/media-generation-core/src/normalization.js";
+import { readLocalFileSafely } from "../../infra/fs-safe.js";
+import {
+  STAGED_INPUT_GITIGNORE,
+  STAGED_INPUT_MAX_BYTES,
+  stagedInputDirectory,
+} from "../../media/staged-inputs.js";
 import { extractOriginalFilename, type SavedMedia } from "../../media/store.js";
+import { captureAgentToolSourceExecutionGuard } from "../agent-tool-source-execution-guard.js";
 import {
   formatGeneratedAttachmentLines,
   sanitizeGeneratedMediaDisplayText,
   type AgentGeneratedAttachment,
 } from "../generated-attachments.js";
+import { isMediaGenerationOperationCurrent } from "../media-generation-activity.js";
 import type { MediaGenerationExecutionResult } from "./media-generate-background-shared.js";
+import type { MediaToolSandbox } from "./media-tool-shared.js";
 
 export type MediaGenerateToolExecutionResult = MediaGenerationExecutionResult & {
   attachments: AgentGeneratedAttachment[];
@@ -28,7 +39,7 @@ export function buildSavedMediaAttachment<T extends "image" | "audio" | "video">
 }
 
 /** Projects generated attachments into the common foreground and completion result contract. */
-export function buildMediaGenerateToolExecutionResult(params: {
+export async function buildMediaGenerateToolExecutionResult(params: {
   kind: "image" | "music" | "video";
   result: {
     provider: string;
@@ -40,11 +51,65 @@ export function buildMediaGenerateToolExecutionResult(params: {
   };
   attachments: AgentGeneratedAttachment[];
   mediaUrls: string[];
+  sandbox?: MediaToolSandbox | null;
+  maxBytes: number;
   messages?: Array<string | null>;
   taskHandle?: { taskId: string; runId: string } | null;
   details: Record<string, unknown>;
-}): MediaGenerateToolExecutionResult {
+}): Promise<MediaGenerateToolExecutionResult> {
   const { result, attachments, mediaUrls } = params;
+  const sandboxPaths: string[] = [];
+  const stagingMessages: string[] = [];
+  if (params.sandbox) {
+    const { root, bridge } = params.sandbox;
+    const assertSourceCurrent = captureAgentToolSourceExecutionGuard();
+    const assertCurrent = () => {
+      assertSourceCurrent();
+      if (params.taskHandle && !isMediaGenerationOperationCurrent(params.taskHandle.runId)) {
+        throw new Error("Media generation task is no longer active");
+      }
+    };
+    const directory = stagedInputDirectory(randomUUID());
+    let ready = false;
+    for (const attachment of attachments) {
+      if (!attachment.path) {
+        continue;
+      }
+      try {
+        const { buffer } = await readLocalFileSafely({
+          filePath: attachment.path,
+          maxBytes: Math.min(params.maxBytes, STAGED_INPUT_MAX_BYTES),
+        });
+        if (!bridge.createFileExclusive) {
+          throw new Error("Sandbox does not support exclusive media staging");
+        }
+        if (!ready) {
+          assertCurrent();
+          const created = await bridge.createFileExclusive({
+            filePath: `${directory}/.gitignore`,
+            cwd: root,
+            data: STAGED_INPUT_GITIGNORE,
+          });
+          if (created !== "created") {
+            throw new Error("Media staging directory already exists");
+          }
+          ready = true;
+        }
+        const filePath = `${directory}/${path.basename(attachment.path)}`;
+        assertCurrent();
+        const created = await bridge.createFileExclusive({ filePath, cwd: root, data: buffer });
+        if (created !== "created") {
+          throw new Error("Media staging file already exists");
+        }
+        sandboxPaths.push(filePath);
+        stagingMessages.push(`Sandbox file: ${JSON.stringify(filePath)}`);
+      } catch (error) {
+        stagingMessages.push(
+          `Sandbox copy unavailable: ${sanitizeGeneratedMediaDisplayText(String(error))}`,
+        );
+      }
+    }
+  }
   const identity = { provider: result.provider, model: result.model, count: attachments.length };
   const displayProvider = sanitizeGeneratedMediaDisplayText(result.provider);
   const displayModel = sanitizeGeneratedMediaDisplayText(result.model);
@@ -64,6 +129,7 @@ export function buildMediaGenerateToolExecutionResult(params: {
     ...(warning ? [`Warning: ${warning}`] : []),
     ...(params.messages ?? []),
     ...formatGeneratedAttachmentLines(attachments),
+    ...stagingMessages,
   ]
     .filter(Boolean)
     .join("\n");
@@ -81,6 +147,7 @@ export function buildMediaGenerateToolExecutionResult(params: {
         ? { task: { taskId: params.taskHandle.taskId, runId: params.taskHandle.runId } }
         : {}),
       ...params.details,
+      ...(sandboxPaths.length ? { sandboxPaths } : {}),
       attempts: result.attempts,
       ...(result.normalization ? { normalization: result.normalization } : {}),
       metadata: result.metadata,
