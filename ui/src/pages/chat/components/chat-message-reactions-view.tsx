@@ -43,9 +43,10 @@ export const MessageReactionPicker = defineSolidBridge<MessageReactionPickerProp
         focusPalette();
       }
     };
-    onCleanup(() =>
-      popover?.overlay.surface.removeEventListener("overlay-after-show", focusPicker),
-    );
+    onCleanup(() => {
+      popover?.overlay.surface.removeEventListener("overlay-after-show", focusPicker);
+      popover?.overlay.surface.removeEventListener("overlay-after-hide", reset);
+    });
     createEffect(custom, () => {
       if (focusAfterCommit === "input") {
         host.querySelector("input")?.focus();
@@ -136,6 +137,7 @@ export const MessageReactionPicker = defineSolidBridge<MessageReactionPickerProp
           ref={(handle) => {
             popover = handle;
             handle.overlay.surface.addEventListener("overlay-after-show", focusPicker);
+            handle.overlay.surface.addEventListener("overlay-after-hide", reset);
           }}
           anchor={trigger}
           class={custom() ? "chat-reaction-picker custom" : "chat-reaction-picker"}
@@ -144,7 +146,6 @@ export const MessageReactionPicker = defineSolidBridge<MessageReactionPickerProp
           onOpenChange={(open) => {
             if (!open) {
               focusAfterCommit = undefined;
-              reset();
             }
           }}
         >
