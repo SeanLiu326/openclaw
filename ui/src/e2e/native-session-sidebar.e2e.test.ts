@@ -275,10 +275,10 @@ suite.define(() => {
       const catalogMenu = () => page.locator("openclaw-catalog-session-menu");
       const menuValues = async () =>
         catalogMenu()
-          .locator("wa-dropdown-item")
+          .getByRole("menuitem")
           .evaluateAll((items) =>
             items
-              .map((item) => item.getAttribute("value"))
+              .map((item) => item.getAttribute("data-value"))
               .filter((value): value is string => Boolean(value)),
           );
       const assertCatalogMenu = async (entryPoint: string) => {
