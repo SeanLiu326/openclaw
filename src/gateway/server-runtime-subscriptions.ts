@@ -1,4 +1,5 @@
 // Gateway event subscription wiring for agent, heartbeat, transcript, and lifecycle broadcasts.
+import { resolveAgentRunLifecycleTerminalFacts } from "@openclaw/normalization-core/agent-run-terminal-outcome";
 import { isAgentLifecycleYieldedWaiting } from "../agents/agent-lifecycle-parent-state.js";
 import { isDefinitiveRunLifecycle } from "../agents/agent-run-terminal-outcome.js";
 import {
@@ -219,6 +220,7 @@ export function startGatewayEventSubscriptions(params: GatewayEventSubscriptionP
     clientRunId: string;
     sessionId?: string;
     persistence: Promise<void>;
+    preserveRestartRecovery?: boolean;
   }) => {
     // Ingress and the lazy chat consumer adopt the same prepared write once.
     if (trackedTerminalWrites.has(run.persistence)) {
@@ -244,7 +246,7 @@ export function startGatewayEventSubscriptions(params: GatewayEventSubscriptionP
           return;
         }
         if (params.chatAbortControllers.get(candidateRunId) === entry) {
-          if (persisted) {
+          if (persisted && !run.preserveRestartRecovery) {
             params.restartRecoveryCandidates.delete(candidateRunId);
           } else if (
             entry.controlUiVisible !== false &&
@@ -451,6 +453,10 @@ export function startGatewayEventSubscriptions(params: GatewayEventSubscriptionP
         }
       }
       if (terminal) {
+        const outcome = resolveAgentRunLifecycleTerminalFacts({
+          phase: lifecyclePhase === "error" ? "error" : "end",
+          data: evt.data,
+        });
         const trackedEntry = candidateRunIds
           .map((candidateRunId) => params.chatAbortControllers.get(candidateRunId))
           .find((entry) => entry !== undefined);
@@ -513,6 +519,9 @@ export function startGatewayEventSubscriptions(params: GatewayEventSubscriptionP
             clientRunId,
             sessionId: evt.sessionId,
             persistence,
+            // Persisted interruption still needs its shutdown recovery cycle.
+            preserveRestartRecovery:
+              outcome.reason === "cancelled" && outcome.stopReason === "restart",
           });
           if (!tracked) {
             void persistence.catch((error: unknown) => {
