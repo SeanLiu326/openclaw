@@ -4922,7 +4922,7 @@ describe("gateway server chat", () => {
         nextOffset?: number;
         hasMore?: boolean;
       }>(ws, "chat.history", makeMainSessionParams({ limit: 1 }));
-      expect(firstPage.ok).toBe(true);
+      expect(firstPage, JSON.stringify(firstPage)).toMatchObject({ ok: true });
       expect(JSON.stringify(firstPage.payload?.messages)).toContain("reachable older message");
       expect(firstPage.payload?.hasMore).toBe(false);
       expect(firstPage.payload?.nextOffset).toBeUndefined();

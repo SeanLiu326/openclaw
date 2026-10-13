@@ -835,6 +835,9 @@ suite.define(() => {
             .getByRole("heading", { name: "Defaults for all agents", exact: true })
             .waitFor();
         }
+        if (route === "cloud-workers") {
+          await page.locator(".cloud-environments__advanced > summary").click();
+        }
 
         if (route === "cloud-workers") {
           expect(await page.locator(".page-subtitle").count()).toBe(0);

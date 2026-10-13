@@ -934,7 +934,7 @@ describe("runReplyAgent Active Memory inline debug", () => {
             data: { phase: "start" },
             transcriptStart: null,
           });
-          await params.onBlockReply?.({ text: reply }, { completed: true });
+          await params.onBlockReply?.({ text: reply });
           return {
             payloads: returned ? [{ text: reply }] : [],
             meta: { finalPromptText: "Trace input", finalAssistantRawText: reply },
@@ -955,6 +955,7 @@ describe("runReplyAgent Active Memory inline debug", () => {
           sessionStore: { [sessionKey]: sessionEntry },
           sessionKey,
           storePath,
+          blockStreamingEnabled: true,
           opts: { onPreparedBlockReply },
         },
       }).run();
