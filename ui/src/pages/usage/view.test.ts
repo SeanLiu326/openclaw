@@ -204,6 +204,7 @@ describe("renderUsage", () => {
       const dropdown = first.closest(".usage-filter-select")!;
       const surface = dropdown.querySelector<HTMLElement>('[role="menu"]')!;
       const trigger = dropdown.querySelector<HTMLButtonElement>(".usage-filter-trigger")!;
+      expect(trigger.getAttribute("aria-label")).toBe("Provider All");
       // JSDOM has no scrolling layout; keep the real Menu click and focus paths.
       for (const item of surface.querySelectorAll<HTMLElement>('[role^="menuitem"]')) {
         item.scrollIntoView = vi.fn();
@@ -216,6 +217,7 @@ describe("renderUsage", () => {
         ].find((item) => item.getAttribute("aria-label") === provider)!;
         option.click();
         await waitForSolid(() => expect(option.getAttribute("aria-checked")).toBe("true"));
+        expect(trigger.getAttribute("aria-label")).toBe(`Provider ${provider === "clear" ? 1 : 2}`);
         expect(first.closest(".usage-filter-select")).toBe(dropdown);
         expect(dropdown.querySelector('[role="menu"]')).toBe(surface);
         expect(container.contains(dropdown)).toBe(true);
@@ -285,9 +287,8 @@ describe("renderUsage", () => {
     props.callbacks.filters.onQueryDraftChange = vi.fn();
     const providerOptions = () =>
       [...container.querySelectorAll<HTMLElement>(".usage-filter-select")]
-        .find(
-          (menu) =>
-            menu.querySelector(".usage-filter-trigger")?.getAttribute("aria-label") === "Provider",
+        .find((menu) =>
+          menu.querySelector(".usage-filter-trigger")?.textContent?.trim().startsWith("Provider"),
         )!
         .querySelectorAll<HTMLElement>(".usage-filter-option");
     const values = () => [...providerOptions()].map((option) => option.getAttribute("aria-label"));

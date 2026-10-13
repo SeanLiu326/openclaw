@@ -51,7 +51,7 @@ export function UsageQueryFilter(props: {
     <Show when={props.options.length > 0}>
       <Menu
         id={`usage-filter-${props.filterKey}`}
-        label={props.label}
+        label={`${props.label} ${selected().length > 0 ? selected().length : t("usage.filters.all")}`}
         class="usage-filter-select"
         triggerClass="usage-filter-trigger"
         placement="bottom-start"
