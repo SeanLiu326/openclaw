@@ -18,7 +18,7 @@ import type { GatewayBrowserClient } from "../api/gateway.ts";
 import "../components/gateway-url-confirmation.ts";
 import "../components/link-reader-hovercard-registration.ts";
 import { renderLazyElementState, renderLazyViewError } from "../components/lazy-view-error.ts";
-import { ConnectingSplash } from "../components/solid/loading-skeleton.tsx";
+import { renderConnectingSplash } from "../components/loading-skeleton.ts";
 import { installTitleTooltips } from "../components/tooltip-title.ts";
 import { i18n } from "../i18n/index.ts";
 import {
@@ -324,7 +324,14 @@ function OpenClawApp(props: { host: HTMLElement; runtime: ApplicationRuntime }):
     );
   }
   function Splash(): SolidJSX.Element {
-    return <ConnectingSplash status={startupStatus()} />;
+    return (
+      <LitRouteHost
+        renderValue={() => {
+          translations.revision();
+          return renderConnectingSplash(startupStatus());
+        }}
+      />
+    );
   }
   function LazyDocument(documentProps: { element: OptionalCustomElement }): SolidJSX.Element {
     return (

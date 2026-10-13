@@ -1,13 +1,14 @@
 /* @vitest-environment jsdom */
 
+import { render } from "@solidjs/testing-library";
+import type { ReactiveElement } from "lit";
 import { flush } from "solid-js";
 import { expect, it, onTestFinished, vi } from "vitest";
 import type { ControlUiHost, ControlUiReplacement } from "../../../src/plugin-sdk/control-ui.js";
 import type { ControlUiRegistration } from "../plugins/control-ui-capability.ts";
 import "../plugins/control-ui-view.solid.tsx";
 import { setupSidebarTest } from "../test-helpers/app-sidebar-setup.ts";
-import { mountSolid } from "../test-helpers/mount-solid.ts";
-import { waitForSolid } from "../test-helpers/solid-settle.ts";
+import { settleLitElement } from "../test-helpers/lit-settle.ts";
 import { ShellOwner } from "./app-host.tsx";
 import { connectLegacyApplicationContext } from "./app-root-lit.ts";
 import { renderApplicationShell } from "./app-shell-view.tsx";
@@ -21,7 +22,7 @@ async function mountShell() {
   owner.routeState = { routeId: "chat" };
   const disconnectContext = connectLegacyApplicationContext(owner.element, runtime.context);
   document.body.append(owner.element);
-  const view = mountSolid(() => renderApplicationShell(owner), {
+  const view = render(() => renderApplicationShell(owner), {
     container: owner.element,
   });
   onTestFinished(() => {
@@ -106,13 +107,12 @@ it("delegates the live shell to a workspace plugin and restores it after deselec
   selected.mockImplementation((surface) => (surface === "workspace" ? replacement : undefined));
   owner.invalidate();
   flush();
-  const plugin = view.container.querySelector("openclaw-plugin-view");
+  const plugin = view.container.querySelector<ReactiveElement>("openclaw-plugin-view");
   expect(plugin).not.toBeNull();
-  await waitForSolid(() => {
-    const target = view.container.querySelector("[data-delegated-workspace]");
-    expect(target?.querySelector(".shell")).toBe(shell);
-    expect(target?.querySelector("openclaw-app-sidebar")).toBe(sidebar);
-  });
+  await settleLitElement(plugin!);
+  const target = view.container.querySelector("[data-delegated-workspace]");
+  expect(target?.querySelector(".shell")).toBe(shell);
+  expect(target?.querySelector("openclaw-app-sidebar")).toBe(sidebar);
 
   selected.mockReturnValue(undefined);
   owner.invalidate();

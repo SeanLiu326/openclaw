@@ -2,11 +2,11 @@ import type { JSX as SolidJSX } from "@solidjs/web";
 import { createEffect, createMemo, Show } from "solid-js";
 import { renderGatewayStatus } from "../components/gateway-status.ts";
 import { icons } from "../components/icons.ts";
+import { renderConnectingSplash } from "../components/loading-skeleton.ts";
 import {
   renderContextNewSessionAction,
   renderNewSessionLink,
 } from "../components/new-session-link.ts";
-import { ConnectingSplash } from "../components/solid/loading-skeleton.tsx";
 import type { ThemeModeChangeDetail } from "../components/theme-mode-toggle.ts";
 import {
   formatKeyboardShortcutCombo,
@@ -29,7 +29,7 @@ import { beginNativeWindowDragFromTopInset } from "./native-window-drag.ts";
 import { floatingSidebarAttentionVisible, renderFloatingUpdateCard } from "./navigation-surface.ts";
 import { RouterOutlet } from "./router-outlet.tsx";
 import { NAV_WIDTH_MAX, NAV_WIDTH_MIN } from "./settings.ts";
-import { CollapsedHomeToggle } from "./shell-assistant-toggles.tsx";
+import { renderCollapsedHomeToggle } from "./shell-assistant-toggles.ts";
 import { ShellLayoutProvider } from "./shell-layout-traits-solid.tsx";
 
 export type { ShellViewHost } from "./app-shell-view-state.ts";
@@ -204,7 +204,12 @@ export function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Eleme
               />
             </openclaw-tooltip>
             <Show when={view().homePanelAvailable && !view().railAvailable}>
-              <CollapsedHomeToggle />
+              <LitRouteHost
+                renderValue={() => {
+                  props.host.shellRevision();
+                  return renderCollapsedHomeToggle();
+                }}
+              />
             </Show>
           </div>
         </Show>
@@ -445,7 +450,17 @@ export function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Eleme
   // A plugin may move the default workspace into its mountDefault target. Solid
   // keeps owning that tree while the temporary Lit plugin host owns only its slot.
   return (
-    <Show when={routeReady()} fallback={<ConnectingSplash />}>
+    <Show
+      when={routeReady()}
+      fallback={
+        <LitRouteHost
+          renderValue={() => {
+            props.host.shellRevision();
+            return renderConnectingSplash();
+          }}
+        />
+      }
+    >
       <Show when={view().workspaceReplacement} fallback={workspace}>
         <openclaw-plugin-view
           prop:surface="workspace"
