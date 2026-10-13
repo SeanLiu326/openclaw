@@ -582,6 +582,7 @@ export function createPluginRuntimeResolver(state: PluginRegistryState) {
         const subagent: PluginRuntime["subagent"] = getRuntimeProperty();
         return {
           complete: (params) => runWithPluginScope(() => subagent.complete(params)),
+          forkSession: (params) => runWithPluginScope(() => subagent.forkSession(params)),
           run: async (params) => {
             const { assertSessionIdentitiesOwned } = await loadSessionOwnership();
             return await runWithPluginScope(async () => {
