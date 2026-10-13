@@ -533,6 +533,9 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
             ...(this.threadInnerElement?.querySelectorAll<HTMLElement>("mcp-app-view") ?? []),
           ].flatMap((app) => app.closest<HTMLElement>(".chat-virtual-row") ?? []),
         );
+        if (appRows.size === 0) {
+          return [];
+        }
         const nextRenderedKeys = rowModelChanged
           ? previewTranscriptRowKeys(virtualizer, nextKeys, this.focusedRowKey)
           : new Set(nextRowKeys);
