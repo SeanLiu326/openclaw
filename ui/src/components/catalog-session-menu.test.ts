@@ -63,7 +63,8 @@ describe("catalog session menu", () => {
   it("closes once after an action synchronously removes the menu", async () => {
     const order: string[] = [];
     const onClose = vi.fn(() => order.push("close"));
-    const menu = document.createElement("openclaw-catalog-session-menu");
+    // SAFETY: The imported bridge registers this tag with its declared properties.
+    const menu = document.createElement("openclaw-catalog-session-menu") as CatalogMenuElement;
     Object.assign(menu, {
       onAction: (action: CatalogSessionMenuAction) => {
         order.push(action);
