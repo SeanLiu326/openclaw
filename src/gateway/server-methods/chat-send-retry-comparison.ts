@@ -60,14 +60,6 @@ export function compareChatSendSubmittedInput(
   }
   const storedMentions = submitted["__openclaw"]?.humanMentions;
   const storedContext = submitted["__openclaw"]?.workContext;
-  if (
-    !request.mentions?.length &&
-    !storedMentions?.length &&
-    !request.workContext &&
-    !storedContext
-  ) {
-    return false;
-  }
   const storedText =
     extractTextFromChatContent(submitted.content, {
       joinWith: "\n",
