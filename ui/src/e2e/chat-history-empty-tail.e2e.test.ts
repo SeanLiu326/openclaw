@@ -95,7 +95,9 @@ suite.define(() => {
         // waiting for a request that a settled cold load must never issue.
         await page.evaluate(async () => {
           for (let frame = 0; frame < 24; frame += 1) {
-            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+            await new Promise<void>((resolve) => {
+              requestAnimationFrame(() => resolve());
+            });
           }
         });
         const bootRequests = await gateway.getRequests("chat.history");

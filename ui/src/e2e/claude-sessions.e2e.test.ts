@@ -777,7 +777,9 @@ suite.define(() => {
       await expectTranscriptLayoutCommitted(thread);
       await page.evaluate(async () => {
         for (let frame = 0; frame < 24; frame += 1) {
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+          });
         }
       });
       expect(await gateway.getRequests("chat.history")).toHaveLength(0);
