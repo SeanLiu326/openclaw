@@ -1,16 +1,20 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { OpenClawAgentDatabase } from "../../state/openclaw-agent-db-contract.js";
 import type { SessionEntryReplacementPublication } from "./session-accessor.sqlite-entry-cache.types.js";
+import type { SessionEntryPatchCommitted } from "./session-entry-patch.types.js";
 import type { SessionEntryWritePostimages } from "./session-entry-write-postimage.js";
 
 type PrepareEntryPatch = (
   database: OpenClawAgentDatabase,
   sessionKey: string,
 ) =>
-  | ((
-      postimages: SessionEntryWritePostimages,
-      publication: SessionEntryReplacementPublication,
-    ) => void)
+  | {
+      transcript: SessionEntryPatchCommitted["transcriptPredicate"];
+      publish(
+        postimages: SessionEntryWritePostimages,
+        publication: SessionEntryReplacementPublication,
+      ): void;
+    }
   | undefined;
 
 const owners = new WeakMap<DatabaseSync, PrepareEntryPatch>();

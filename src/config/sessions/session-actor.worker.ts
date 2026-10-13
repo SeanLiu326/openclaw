@@ -109,12 +109,16 @@ export function createSessionActorWorker(
     if (
       closed ||
       !before?.hot.entry ||
-      before.hot.writeToken !== token(database, before.hot.target, before.hot.dependencySessionIds)
+      before.hot.writeToken !==
+        readSqliteDatabasePendingScopedWriteToken(
+          database.db,
+          scopes(before.hot.target, before.hot.dependencySessionIds),
+        )
     ) {
       return undefined;
     }
     const previousEntry = before.hot.entry;
-    return (
+    const publish = (
       postimages: SessionEntryWritePostimages,
       publication: SessionEntryReplacementPublication,
     ) => {
@@ -159,6 +163,13 @@ export function createSessionActorWorker(
           [sessionKey, freezeJsonSnapshot(structuredClone(working.hot))],
         ]);
       }
+    };
+    return {
+      transcript: {
+        sessionId: previousEntry.sessionId,
+        watermark: { ...before.hot.transcript.watermark },
+      },
+      publish,
     };
   };
   const registerTranscriptRewriteOwner = (database: OpenClawAgentDatabase) =>
