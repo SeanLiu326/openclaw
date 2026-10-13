@@ -85,7 +85,9 @@ function textTurn(text: string): string {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 describe("chat.send same-ID retry input comparison across a real gateway restart", () => {
@@ -102,7 +104,7 @@ describe("chat.send same-ID retry input comparison across a real gateway restart
       const requests: ProviderRequest[] = [];
       let holdNext = false;
       let heldResponse: ServerResponse | undefined;
-      const heldRequestSeen = createDeferred<void>();
+      const heldRequestSeen = createDeferred();
       const releaseHeld = () => {
         const response = heldResponse;
         heldResponse = undefined;
