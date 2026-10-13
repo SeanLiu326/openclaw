@@ -104,10 +104,10 @@ export function createRequiredWorkerTurnAdmission(options: WorkerTurnAdmissionOp
     assertLocalAllowed() {
       assertRequiredWorkerLocalExecution(getRuntimeConfig());
     },
-    assertCurrent(claim: LocalTurnPlacementClaim) {
+    assertCurrent(readPlacement: () => WorkerSessionPlacementRecord | undefined) {
       const required = getRuntimeConfig().cloudWorkers?.requiredProfile;
       if (required) {
-        const live = options.placements.get(claim.sessionId);
+        const live = readPlacement();
         const environment = live?.environmentId
           ? options.environments.get(live.environmentId)
           : undefined;
@@ -202,7 +202,7 @@ export async function waitForPendingWorkerResult(params: {
 }
 /** Join live setup without admitting work against a stale session or destination. */
 export async function waitForInitialWorkerPlacement(params: {
-  placements: WorkerSessionPlacementStore;
+  readPlacement: () => WorkerSessionPlacementRecord | undefined;
   placement: WorkerSessionPlacementRecord;
   turn: SessionPlacementTurnParams;
   wait: (
@@ -255,7 +255,7 @@ export async function waitForInitialWorkerPlacement(params: {
     let placement = completed;
     const assertCurrent = composeSessionSourceAssertion([assertSessionCurrent], (assertSession) => {
       assertSession();
-      const current = params.placements.get(identity.sessionId);
+      const current = params.readPlacement();
       if (
         !current ||
         !matchesWorkerPlacementTarget(current, completed) ||
