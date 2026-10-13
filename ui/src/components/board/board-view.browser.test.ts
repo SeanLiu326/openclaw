@@ -86,6 +86,24 @@ afterEach(() => {
 });
 
 describe.skipIf(!hasBrowserLayout)("openclaw-board-view browser layout", () => {
+  it("preserves vertical ancestor scroll when a board mounts or its tabs refresh", async () => {
+    const parent = document.createElement("div");
+    parent.style.cssText = "height: 120px; overflow-y: auto";
+    const spacer = document.createElement("div");
+    spacer.style.height = "600px";
+    parent.append(spacer);
+    document.body.append(parent);
+    const view = await mount(undefined, parent);
+    expect(parent.scrollTop).toBe(0);
+
+    view.snapshot = {
+      ...structuredClone(source),
+      tabs: [...source.tabs, { tabId: "later", title: "Later", position: 2, chatDock: "right" }],
+    };
+    await view.updateComplete;
+    expect(parent.scrollTop).toBe(0);
+  });
+
   it("keeps the overflow-selected tab visible without moving focus from More", async () => {
     const { page } = await import("vitest/browser");
     const view = await mount();

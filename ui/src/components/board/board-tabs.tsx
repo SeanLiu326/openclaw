@@ -35,11 +35,20 @@ export function BoardTabs(props: {
   );
   createEffect(layoutKey, () => {
     // Read selection after the keyed tab items have committed.
-    queueMicrotask(() =>
-      track
-        ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
-        ?.scrollIntoView?.({ block: "nearest", inline: "nearest" }),
-    );
+    queueMicrotask(() => {
+      const scroller = track;
+      const selected = scroller?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (!scroller || !selected) {
+        return;
+      }
+      const viewport = scroller.getBoundingClientRect();
+      const tab = selected.getBoundingClientRect();
+      if (tab.left < viewport.left) {
+        scroller.scrollLeft += tab.left - viewport.left;
+      } else if (tab.right > viewport.right) {
+        scroller.scrollLeft += tab.right - viewport.right;
+      }
+    });
   });
   return (
     <Show when={props.tabs.length > 1}>
