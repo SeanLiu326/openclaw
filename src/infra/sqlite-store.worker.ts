@@ -178,6 +178,7 @@ async function receive(request: SqliteWorkerRequest): Promise<void> {
             port: request.operationAdmission,
             requestCustody: request.requestCustody,
             executionAuthority: request.executionAuthority,
+            maintenanceAuthority: request.maintenanceAuthority,
           },
         };
       }
