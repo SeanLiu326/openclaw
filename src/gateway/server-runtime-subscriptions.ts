@@ -241,6 +241,14 @@ export function startGatewayEventSubscriptions(params: GatewayEventSubscriptionP
       const sessionId = run.sessionId?.trim() || entry.sessionId.trim();
       // Lazy chat consumption must retain the terminal time stamped at ingress.
       const observedAt = entry.projectSessionTerminalObservedAt;
+      const recoveryCandidate =
+        entry.controlUiVisible !== false && lifecycleGeneration && sessionKey && sessionId
+          ? { runId: candidateRunId, lifecycleGeneration, sessionKey, sessionId, observedAt }
+          : undefined;
+      // Capture interruption custody while this registration is live; its write can outlast removal.
+      if (run.preserveRestartRecovery && recoveryCandidate) {
+        params.restartRecoveryCandidates.set(candidateRunId, recoveryCandidate);
+      }
       const settle = (persisted: boolean, error?: unknown) => {
         if (entry.projectSessionTerminalPersistence !== run.persistence) {
           return;
@@ -248,19 +256,8 @@ export function startGatewayEventSubscriptions(params: GatewayEventSubscriptionP
         if (params.chatAbortControllers.get(candidateRunId) === entry) {
           if (persisted && !run.preserveRestartRecovery) {
             params.restartRecoveryCandidates.delete(candidateRunId);
-          } else if (
-            entry.controlUiVisible !== false &&
-            lifecycleGeneration &&
-            sessionKey &&
-            sessionId
-          ) {
-            params.restartRecoveryCandidates.set(candidateRunId, {
-              runId: candidateRunId,
-              lifecycleGeneration,
-              sessionKey,
-              sessionId,
-              observedAt,
-            });
+          } else if (!run.preserveRestartRecovery && recoveryCandidate) {
+            params.restartRecoveryCandidates.set(candidateRunId, recoveryCandidate);
           }
         }
         // Captured drain targets still need final facts after registry retirement.

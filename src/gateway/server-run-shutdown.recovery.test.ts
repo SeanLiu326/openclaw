@@ -1,5 +1,6 @@
 import { expectDefined } from "@openclaw/normalization-core/expect";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { createDeferred } from "../../test/helpers/promise.js";
 import { commitMainSessionRecovery } from "../agents/main-session-recovery/main-session-recovery-store.js";
 import {
   markRestartAbortedMainSessions,
@@ -37,7 +38,11 @@ import {
   type OpenClawTestState,
 } from "../test-utils/openclaw-test-state.js";
 import { waitForChatAbortTerminalPersistence } from "./chat-abort-lifecycle-internal.js";
-import { registerChatAbortController, type ChatAbortControllerEntry } from "./chat-abort.js";
+import {
+  registerChatAbortController,
+  removeChatAbortControllerEntry,
+  type ChatAbortControllerEntry,
+} from "./chat-abort.js";
 import { registerQueuedChatTurn, type QueuedChatTurnMap } from "./chat-queued-turns.js";
 import { createAgentEventTestHarness } from "./server-chat.agent-events.test-harness.js";
 import { subscribeAgentEvents } from "./server-chat.agent-events.test-helpers.js";
@@ -324,7 +329,7 @@ it.each(["admission", "queue", "delegated"] as const)(
   },
 );
 
-it.each(["interrupted", "completed", "replacement"] as const)(
+it.each(["interrupted", "retired while persisting", "completed", "replacement"] as const)(
   "retains only interrupted terminal custody before shutdown marking: %s",
   async (outcome) => {
     const sessionKey = `agent:main:dashboard:persisted-terminal-${outcome}`;
@@ -348,6 +353,19 @@ it.each(["interrupted", "completed", "replacement"] as const)(
     const drain = () => (unsubscribeAgent ??= unsubs.agentUnsub());
     let replacement: ReturnType<typeof registerSubscriptionChatRun> | undefined;
     const replacementRunId = `${runId}-replacement`;
+    const writeEntered = createDeferred();
+    const releaseWrite = createDeferred();
+    const patch = sessionAccessor.patchSessionEntryTarget;
+    const heldWrite =
+      outcome === "retired while persisting"
+        ? vi
+            .spyOn(sessionAccessor, "patchSessionEntryTarget")
+            .mockImplementationOnce(async (...args) => {
+              writeEntered.resolve();
+              await releaseWrite.promise;
+              return patch(...args);
+            })
+        : undefined;
     try {
       if (outcome !== "completed") {
         registration.controller.abort(createAgentRunRestartAbortError());
@@ -364,6 +382,14 @@ it.each(["interrupted", "completed", "replacement"] as const)(
         },
       });
       registration.cleanup();
+      if (heldWrite) {
+        await writeEntered.promise;
+        // Retiring this exact registration must not discard its accepted interruption write.
+        expect(
+          removeChatAbortControllerEntry(params.chatAbortControllers, runId, registration.entry),
+        ).toBe(true);
+        releaseWrite.resolve();
+      }
       await waitForChatAbortTerminalPersistence(registration.entry);
       expect(params.chatAbortControllers.has(runId)).toBe(false);
       expect(loadSessionEntry(target)).toMatchObject({
@@ -410,7 +436,7 @@ it.each(["interrupted", "completed", "replacement"] as const)(
         },
       });
       const saved = loadSessionEntry(target);
-      if (outcome === "interrupted") {
+      if (outcome === "interrupted" || outcome === "retired while persisting") {
         expect(saved).toMatchObject({
           status: "interrupted",
           abortedLastRun: true,
@@ -426,7 +452,9 @@ it.each(["interrupted", "completed", "replacement"] as const)(
         }
       }
     } finally {
+      releaseWrite.resolve();
       await drain();
+      heldWrite?.mockRestore();
       unsubs.heartbeatUnsub();
       unsubs.transcriptUnsub();
       unsubs.lifecycleUnsub();

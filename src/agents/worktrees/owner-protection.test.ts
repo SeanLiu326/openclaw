@@ -85,7 +85,11 @@ beforeEach(() => {
       assertCurrent: () => {},
       release: () => {},
     }),
-    prepareSessionPlacement: async () => ({ current: () => undefined, release: () => {} }),
+    prepareSessionPlacement: async () => ({
+      prepareRead: () => undefined,
+      current: () => undefined,
+      release: () => {},
+    }),
   });
   mocks.isSessionWorkAdmissionActive.mockReturnValue(false);
   mocks.isSessionLifecycleMutationActive.mockReturnValue(false);
@@ -385,7 +389,11 @@ describe("createManagedWorktreeOwnerPolicy", () => {
       prepareMaintenancePlacements: async () => {
         throw new Error("unreadable placement");
       },
-      prepareSessionPlacement: async () => ({ current: () => undefined, release: () => {} }),
+      prepareSessionPlacement: async () => ({
+        prepareRead: () => undefined,
+        current: () => undefined,
+        release: () => {},
+      }),
     });
     const remove = vi.fn(async () => {});
     const policy = createManagedWorktreeOwnerPolicy({});
