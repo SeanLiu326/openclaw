@@ -294,6 +294,24 @@ async function run() {
       /database or disk is full/,
     );
 
+    // Export manifests retain deleted sequence highs even when an image is compacted.
+    identityRestored.exec("DELETE FROM sqlite_sequence");
+    const matchedStage = stage();
+    const matched = await materializeDatabasePort({
+      ...common,
+      source: { engine: "sqlite", db: identityRestored },
+      destination: matchedStage,
+      descriptor: identityDescriptor,
+      sourceAllocations: identityReverse.allocations,
+    });
+    assert.deepEqual(matched, identityReverse);
+    await assert.rejects(
+      client.query(
+        `INSERT INTO "${matchedStage.namespace}".port_facts (summary_json) VALUES ('{}')`,
+      ),
+      /reached maximum value/,
+    );
+
     const derivedNul = open();
     derivedNul.exec(identityDescriptor.sqlite);
     derivedNul
