@@ -22,6 +22,7 @@ import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { setRuntimeConfigSnapshot } from "../runtime-snapshot.js";
 import {
   appendSessionTranscriptReport,
+  loadSessionEntry,
   loadTranscriptEvents,
   upsertSessionEntryCore,
 } from "./session-accessor.js";
@@ -251,11 +252,23 @@ describe("SQLite report payload selection", () => {
       await upsertSessionEntryCore(scope, {
         sessionId: scope.sessionId,
         lifecycleRevision: "current-lifecycle",
+        inputTokens: 2_605,
+        outputTokens: 19,
+        cacheRead: 12,
+        cacheWrite: 3,
+        totalTokens: 2_624,
+        totalTokensFresh: true,
+        totalTokensVersion: 1,
+        estimatedCostUsd: 0.25,
         updatedAt: 1,
       });
       const partial = {
         runId: "stopped-run",
-        message: { ...assistant, idempotencyKey: "stopped-run:assistant" },
+        message: {
+          ...assistant,
+          usage: { ...assistant.usage, usageReport: { state: "unavailable" as const } },
+          idempotencyKey: "stopped-run:assistant",
+        },
       };
       const before = transcriptSnapshot(db);
       const hostTransactions = vi.spyOn(db, "exec");
@@ -285,6 +298,22 @@ describe("SQLite report payload selection", () => {
       });
       if (!result.ok || result.value.skipped) {
         throw new Error("Expected a committed fallback receipt");
+      }
+      const saved = loadSessionEntry(scope);
+      expect(saved).toMatchObject({
+        usageReport: { state: "unavailable" },
+        totalTokensFresh: false,
+      });
+      for (const field of [
+        "inputTokens",
+        "outputTokens",
+        "cacheRead",
+        "cacheWrite",
+        "estimatedCostUsd",
+        "totalTokens",
+        "totalTokensVersion",
+      ]) {
+        expect(saved).not.toHaveProperty(field);
       }
       expect(onUpdate).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
