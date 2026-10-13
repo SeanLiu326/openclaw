@@ -61,6 +61,7 @@ vi.mock("../infra/push-web.js", async (importOriginal) => ({
   // Keep every store operation real; only the prepared provider is deferred.
   prepareWebPushNotificationSender: async () => mocks.preparedSend,
 }));
+// mock-isolation: Hold synthetic pairing replies without starting the real SQLite worker.
 vi.mock("../infra/device-pairing-worker.js", () => ({
   withCurrentDevicePairingSnapshot: async <T>(
     _stateDir: string | undefined,

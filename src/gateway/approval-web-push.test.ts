@@ -68,6 +68,7 @@ vi.mock("../state/user-preferences.js", async (importOriginal) => ({
   getUserPreferenceValues: getUserPreferenceValuesMock,
 }));
 
+// mock-isolation: Approval routing uses synthetic session facts without opening session stores.
 vi.mock("./session-sharing-preparation.js", () => ({
   prepareSessionMutationFacts: async () => ({
     prepareRead: () => undefined,
