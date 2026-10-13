@@ -4,12 +4,14 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { SubsystemLogger } from "../../logging/subsystem.js";
 import type { CapabilityProviderFor } from "../../plugins/capability-provider-runtime.js";
 import type { InputProvenance } from "../../sessions/input-provenance.js";
+import type { SkillSnapshot } from "../../skills/types.js";
 import type { DeliveryContext } from "../../utils/delivery-context.types.js";
 import {
   captureAgentToolSourceExecutionGuard,
   runWithAgentToolSourceExecutionScope,
 } from "../agent-tool-source-execution-guard.js";
 import type { AuthProfileStore } from "../auth-profiles/types.js";
+import type { ExecPolicyOverrides } from "../exec-defaults.js";
 import { recordRecentMediaGenerationTaskStartForSession } from "../media-generation-task-status-shared.js";
 import type { PreparedModelRuntimeSnapshot } from "../prepared-model-runtime.types.js";
 import type { ToolFsPolicy } from "../tool-fs-policy.js";
@@ -48,6 +50,7 @@ export type MediaGenerateToolOptions = {
   authProfileStore?: AuthProfileStore;
   authProfileStoreSource?: boolean;
   agentSessionKey?: string;
+  sandboxSessionKey?: string;
   /** Durable requester transcript key; task ownership stays on agentSessionKey. */
   requesterRunSessionKey?: string;
   requesterAgentId?: string;
@@ -55,6 +58,8 @@ export type MediaGenerateToolOptions = {
   inputProvenance?: InputProvenance;
   workspaceDir?: string;
   spawnWorkspaceDir?: string;
+  skillsSnapshot?: SkillSnapshot;
+  execOverrides?: ExecPolicyOverrides;
   cwd?: string;
   preparedModelRuntime?: PreparedModelRuntimeSnapshot;
   sandbox?: MediaToolSandbox;
@@ -105,24 +110,27 @@ export function resolveMediaGenerateToolContext<K extends keyof typeof GENERATIO
       onCrash: (message, meta) => logger.error(message, meta),
     });
   const outputSandbox = options?.sandbox;
+  const sandboxSessionKey = options?.sandboxSessionKey ?? options?.agentSessionKey;
   const acquireOutputSandbox: AcquireGeneratedMediaSandbox | undefined = outputSandbox
     ? async (assertCurrent) => {
         assertCurrent();
-        if (!options?.agentSessionKey) {
+        if (!sandboxSessionKey) {
           return { ...outputSandbox, [Symbol.dispose]() {} };
         }
         // Detached generation outlives the originating turn's workspace projection.
         const { resolveSandboxContext } = await import("../sandbox/context.js");
         const sandbox = await resolveSandboxContext({
           config: cfg,
-          sessionKey: options.agentSessionKey,
-          agentId: options.requesterAgentId,
-          workspaceDir: options.spawnWorkspaceDir ?? options.workspaceDir,
+          sessionKey: sandboxSessionKey,
+          agentId: options?.requesterAgentId,
+          workspaceDir: options?.spawnWorkspaceDir ?? options?.workspaceDir,
+          skillsSnapshot: options?.skillsSnapshot,
+          execOverrides: options?.execOverrides,
           assertCurrent,
         });
-        if (!sandbox?.fsBridge) {
+        if (!sandbox?.fsBridge || sandbox.workspaceDir !== outputSandbox.root) {
           sandbox?.[Symbol.dispose]?.();
-          throw new Error("The requesting sandbox is no longer available");
+          throw new Error("The requesting sandbox workspace is no longer available");
         }
         return {
           root: sandbox.workspaceDir,

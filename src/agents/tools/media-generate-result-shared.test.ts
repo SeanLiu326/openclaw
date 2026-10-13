@@ -116,12 +116,24 @@ describe("generated media sandbox access", () => {
     },
   );
 
-  it("reacquires and releases the sandbox after the originating projection closes", async () => {
+  it("reacquires the original sandbox selection after its projection closes and rejects rerouting", async () => {
     const { workspace, sandbox, params } = await fixture();
     const originalWrite = vi
       .spyOn(sandbox.bridge, "createFileExclusive")
       .mockRejectedValue(new Error("Originating projection has closed"));
     const dispose = vi.fn();
+    const skillsSnapshot = {
+      prompt: "",
+      skills: [],
+      librarySelections: [
+        {
+          skillId: "00000000-0000-4000-8000-000000000001",
+          revision: "a".repeat(64),
+          name: "skill",
+          ownerProfileId: "owner",
+        },
+      ],
+    };
     resolveSandboxContext.mockResolvedValue(
       createSandboxTestContext({
         overrides: {
@@ -135,10 +147,12 @@ describe("generated media sandbox access", () => {
       "imageGenerationProviders",
       {
         config: {},
-        agentSessionKey: "agent:main:generated",
+        agentSessionKey: "agent:main:cron:generated:run:current",
+        sandboxSessionKey: "agent:main:generated",
         requesterAgentId: "main",
         workspaceDir: "/closed/projection",
         spawnWorkspaceDir: "/canonical/worktree",
+        skillsSnapshot,
         sandbox,
       },
       { warn: vi.fn(), error: vi.fn() },
@@ -156,6 +170,8 @@ describe("generated media sandbox access", () => {
       sessionKey: "agent:main:generated",
       agentId: "main",
       workspaceDir: "/canonical/worktree",
+      skillsSnapshot,
+      execOverrides: undefined,
       assertCurrent: expect.any(Function),
     });
     const [relativePath] = result.details.sandboxPaths as string[];
@@ -165,5 +181,24 @@ describe("generated media sandbox access", () => {
     await expect(fs.readFile(path.join(workspace, relativePath))).resolves.toEqual(png);
     expect(originalWrite).not.toHaveBeenCalled();
     expect(dispose).toHaveBeenCalledOnce();
+
+    const otherWorkspace = tempDirs.make("other-sandbox-");
+    resolveSandboxContext.mockResolvedValue(
+      createSandboxTestContext({
+        overrides: {
+          workspaceDir: otherWorkspace,
+          fsBridge: createHostSandboxFsBridge(otherWorkspace),
+          [Symbol.dispose]: dispose,
+        },
+      }),
+    );
+    const refused = await buildMediaGenerateToolExecutionResult({
+      ...params,
+      sandbox: context.acquireOutputSandbox,
+    });
+    expect(refused.details.sandboxPaths).toBeUndefined();
+    expect(refused.wakeResult).toContain("Sandbox copy unavailable");
+    await expect(fs.readdir(otherWorkspace)).resolves.toEqual([]);
+    expect(dispose).toHaveBeenCalledTimes(2);
   });
 });

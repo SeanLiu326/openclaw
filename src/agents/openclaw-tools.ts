@@ -290,6 +290,7 @@ function* createOpenClawToolsSteps(
   options?.recordToolPrepStage?.("openclaw-tools:image-tool");
   const mediaGenerationToolOptions = {
     ...options,
+    sandboxSessionKey: options?.agentSessionKey,
     agentSessionKey: mediaGenerationAgentSessionKey,
     requesterRunSessionKey: trimmedRunSessionKey,
     requesterAgentId: sessionAgentId,

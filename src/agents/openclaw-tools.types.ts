@@ -5,6 +5,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { ExecMode } from "../infra/exec-approvals.js";
 import type { MemoryAudience } from "../plugins/memory-provider-types.js";
 import type { InputProvenance } from "../sessions/input-provenance.js";
+import type { SkillSnapshot } from "../skills/types.js";
 import type { HookContext } from "./agent-tools.before-tool-call.js";
 import type { AgentRunClientContext, AgentRunMessageContext } from "./command/shared-types.js";
 import type { PreparedPairedComputerUse } from "./computer-use-node-capabilities.js";
@@ -27,6 +28,7 @@ import type { SkillWorkshopRunOptions } from "./tools/skill-workshop-tool-factor
 export type OpenClawSharedToolsOptions = {
   /** Complete model-discoverable catalog, prepared by the current host. */
   installedSkills?: readonly InstalledSkill[];
+  skillsSnapshot?: SkillSnapshot;
   /**
    * Overrides the originating-channel sender for blocking questions. An actual
    * harness prompt reservation retains delivery ownership.
