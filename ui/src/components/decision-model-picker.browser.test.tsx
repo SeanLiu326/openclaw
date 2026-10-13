@@ -1,9 +1,10 @@
-import { render } from "lit";
+import { createSignal, flush } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { userEvent } from "vitest/browser";
+import { mountSolid } from "../test-helpers/mount-solid.ts";
 import { updatePickers } from "../test-helpers/select-picker.ts";
-import { renderDecisionModelPicker, type DecisionModelEntry } from "./decision-model-picker.ts";
 import type { SelectPicker } from "./select-picker.ts";
+import { DecisionModelPicker, type DecisionModelEntry } from "./solid/decision-model-picker.tsx";
 
 const models: DecisionModelEntry[] = [
   { provider: "alpha", id: "last", name: "Zulu", pluginId: "alpha" },
@@ -12,7 +13,7 @@ const models: DecisionModelEntry[] = [
 ];
 afterEach(() => document.body.replaceChildren());
 
-async function mount(overrides: Partial<Parameters<typeof renderDecisionModelPicker>[0]> = {}) {
+async function mount(overrides: Partial<Parameters<typeof DecisionModelPicker>[0]> = {}) {
   const container = document.createElement("div");
   const params = {
     id: "decision",
@@ -22,9 +23,12 @@ async function mount(overrides: Partial<Parameters<typeof renderDecisionModelPic
     onChange: vi.fn(),
     ...overrides,
   };
+  const [props, setProps] = createSignal({ ...params });
+  mountSolid(() => <DecisionModelPicker {...props()} />, { container });
   const update = async (patch: Partial<typeof params> = {}) => {
     Object.assign(params, patch);
-    render(renderDecisionModelPicker({ ...params }), container);
+    setProps({ ...params });
+    flush();
     await updatePickers(container);
   };
   await update();

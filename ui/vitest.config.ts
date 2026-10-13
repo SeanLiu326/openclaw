@@ -119,7 +119,7 @@ const webkitTestFiles = [
   "src/components/select-picker.behavior.browser.test.ts",
   "src/components/multi-select.browser.test.ts",
   "src/components/model-picker.browser.test.ts",
-  "src/components/decision-model-picker.browser.test.ts",
+  "src/components/decision-model-picker.browser.test.tsx",
   "src/components/agent-select-opening.browser.test.ts",
   "src/components/agent-emoji-picker.browser.test.ts",
   "src/components/appearance-picker.browser.test.ts",
