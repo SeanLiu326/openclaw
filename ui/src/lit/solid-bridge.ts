@@ -1,5 +1,5 @@
 import { ContextProvider } from "@lit/context";
-import { insert, render, spread, type JSX } from "@solidjs/web";
+import { insert, render, spread } from "@solidjs/web";
 import {
   createComponent,
   createRenderEffect,
@@ -14,6 +14,7 @@ import { applicationContext, type ApplicationContext } from "../app/context.ts";
 import { shellLayoutOwnerForHost } from "../app/shell-layout-owner.ts";
 import { ShellLayoutProvider } from "../app/shell-layout-traits-solid.tsx";
 import { ApplicationProvider } from "../lib/reactive/context.ts";
+import type { JSX } from "../types/solid-elements.d.ts";
 import { mountLitContent } from "./solid-content.tsx";
 
 /** Temporary DOM-context bridge for unported Lit descendants; delete at cutover. */
