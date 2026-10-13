@@ -17,6 +17,7 @@ import {
 import { TranscriptEndAnchor } from "./chat-transcript-end-anchor.ts";
 import {
   initialTranscriptRect,
+  isTranscriptRangeCommitted,
   measureTranscriptRow,
   PositionRailGutterController,
 } from "./chat-transcript-geometry.ts";
@@ -563,11 +564,8 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
   }
 
   get isPositionSettled(): boolean {
-    return (
-      this.contentReady &&
-      !this.initialPositionPending &&
-      this.offsetState.pendingScrollOffset === null
-    );
+    const { pendingScrollOffset } = this.offsetState;
+    return this.contentReady && !this.initialPositionPending && !pendingScrollOffset;
   }
 
   private canAutoFollow(): boolean {
@@ -782,19 +780,10 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
       this.scrollToEnd({ source: "auto", behavior: "instant" });
       this.offsetState.syncNativeOffset?.();
     }
-    for (const row of this.virtualizer.getVirtualItems()) {
-      const node = this.virtualizer.elementsCache.get(row.key);
-      if (
-        !node ||
-        !this.threadInnerElement?.contains(node) ||
-        Number.parseFloat(node.style.getPropertyValue("contain-intrinsic-block-size")) !== row.size
-      ) {
-        this.host.requestUpdate();
-        return;
-      }
+    if (isTranscriptRangeCommitted(this.threadInnerElement, this.virtualizer)) {
+      this.initialPositionPending = false;
+      this.renderer.syncInitialPosition();
     }
-    this.initialPositionPending = false;
-    this.renderer.syncInitialPosition();
     this.host.requestUpdate();
   };
 }

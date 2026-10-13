@@ -690,7 +690,7 @@ suite.define(() => {
     await page.close();
   });
 
-  it("auto-pages an underfilled native transcript until it becomes scrollable", async () => {
+  it("pages an underfilled native transcript only after reader input", async () => {
     const artifactRoot = process.env.OPENCLAW_UI_E2E_ARTIFACT_DIR?.trim();
     const artifactDir = artifactRoot
       ? createControlUiE2eArtifactDir("claude-sessions", artifactRoot)
@@ -774,6 +774,15 @@ suite.define(() => {
       const pane = page.locator('openclaw-chat-pane[aria-hidden="false"]');
       const thread = pane.locator(".chat-thread");
       await page.getByText("Recent answer", { exact: true }).waitFor();
+      await expectTranscriptLayoutCommitted(thread);
+      await page.evaluate(async () => {
+        for (let frame = 0; frame < 24; frame += 1) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        }
+      });
+      expect(await gateway.getRequests("chat.history")).toHaveLength(0);
+      await thread.hover();
+      await page.mouse.wheel(0, -1000);
       await expect
         .poll(async () =>
           (await gateway.getRequests("chat.history")).map(
@@ -803,19 +812,19 @@ suite.define(() => {
           ),
         )
         .toEqual([2, 6]);
-      await expectHistoryBoundaryState(pane, true);
+      const showEarlier = await expectHistoryBoundaryState(pane, false);
       expect(await thread.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(
         true,
       );
       if (artifactDir) {
         await writeFile(
-          path.join(artifactDir, "01-native-history-continued-auto-load.png"),
-          await takeControlUiViewportScreenshot(page, pane.locator(".chat-main"), [
-            pane.locator('.chat-history-boundary__action[aria-busy="true"]'),
-          ]),
+          path.join(artifactDir, "01-native-history-prefetch-held.png"),
+          await takeControlUiViewportScreenshot(page, pane.locator(".chat-main"), [showEarlier]),
         );
       }
 
+      await showEarlier.click();
+      await expectHistoryBoundaryState(pane, true);
       await gateway.resolveDeferred("chat.history");
       await expect
         .poll(() => thread.evaluate((element) => element.scrollHeight > element.clientHeight))
@@ -833,9 +842,9 @@ suite.define(() => {
       }
       // The second applied page staged one background prefetch (offset 22);
       // the now-scrollable transcript must not consume or chain beyond it.
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 300);
-      });
+      await expect
+        .poll(() => gateway.getRequests("chat.history").then((requests) => requests.length))
+        .toBe(3);
       expect(
         (await gateway.getRequests("chat.history")).map(
           (request) => (request.params as { offset?: number } | undefined)?.offset,
@@ -847,7 +856,7 @@ suite.define(() => {
     } finally {
       await suite.closeBrowserContext(context);
       if (artifactDir && proofVideo) {
-        await proofVideo.saveAs(path.join(artifactDir, "native-history-auto-pagination.webm"));
+        await proofVideo.saveAs(path.join(artifactDir, "native-history-reader-pagination.webm"));
       }
     }
   });
