@@ -365,7 +365,7 @@ describe("SQLite transcript archive sessions", () => {
     ).toEqual({ published_at: expect.any(Number), last_publish_error: null });
   });
 
-  it("retires competing archive scopes and publishes with the originally captured environment", async () => {
+  it("hands off idle execution between archive scopes and preserves the captured environment", async () => {
     testState.envVars.OPENCLAW_SUPERVISOR_MODE = " ExTeRnAl ";
     testState.applyEnv();
     const first = {
@@ -462,7 +462,7 @@ describe("SQLite transcript archive sessions", () => {
         ["published", second.sessionId],
         ["published", first.sessionId],
       ]);
-      expect(observedWorkers.size).toBe(3);
+      expect(observedWorkers.size).toBe(2);
       expect(activeWorkersAtReply).toEqual([1, 1, 1, 1]);
       expect([...observedWorkers].every((worker) => worker.threadId === -1)).toBe(true);
     } finally {
