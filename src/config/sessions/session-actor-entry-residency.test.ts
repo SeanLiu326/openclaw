@@ -186,6 +186,11 @@ it("retains resident session facts across usage cache writes and reloads actual 
 
 it("keeps transcript residency across entry patches without losing either owner's writes", async () => {
   await withActor(async (f) => {
+    f.database.db
+      .prepare(
+        "INSERT INTO board_tabs (session_key, tab_id, title, position, created_by, revision) VALUES (?, 'main', 'Synthetic board', 0, 'user', 0)",
+      )
+      .run(f.target.sessionKey);
     runSqliteImmediateTransactionSync(f.database.db, () =>
       appendTranscriptEventsInTransaction(f.database, f.scope, [
         {
@@ -205,7 +210,7 @@ it("keeps transcript residency across entry patches without losing either owner'
       ]),
     );
     const before = f.read();
-    const entryPatch = (fields: { label?: string; lifecycleRevision?: string }) =>
+    const entryPatch = (fields: { label?: string; lifecycleRevision?: string; model?: string }) =>
       f.patchEntry({
         selection: { kind: "entry", sessionKey: f.target.sessionKey, exact: true },
         sessionKey: f.target.sessionKey,
@@ -214,15 +219,26 @@ it("keeps transcript residency across entry patches without losing either owner'
         validateCanonicalKeys: false,
         preserveActivity: true,
       });
-    entryPatch({ label: "entry owner committed" });
+    entryPatch({ label: "entry owner committed", model: "updated-model" });
+    runSqliteImmediateTransactionSync(f.database.db, () =>
+      recordSessionParticipantFromWorker(f.database, f.scope, {
+        identity: { type: "agent", id: "peer" },
+        promptedAt: 10,
+      }),
+    );
     const reads = trackSqliteStatementExecutions(f.database.db, ["select"], (sql) =>
       /^select\b/iu.test(sql) ? "select" : null,
     );
     try {
       const after = f.read();
       expect(after.entry?.label).toBe("entry owner committed");
+      expect(after.entry?.model).toBe("updated-model");
+      expect(after.hasBoard).toBe(true);
+      expect(after.participants).toMatchObject([
+        { identity: { id: "peer" }, contributionCount: 1 },
+      ]);
       expect(after.transcript).toEqual(before.transcript);
-      expect(after.version).toEqual({ ...before.version, sequence: before.version.sequence + 1 });
+      expect(after.version).toEqual({ ...before.version, sequence: before.version.sequence + 2 });
       const accounting: Mutation = {
         type: "session.actor.patch",
         input: {
@@ -286,5 +302,7 @@ it("keeps transcript residency across entry patches without losing either owner'
     const replaced = f.read();
     expect(replaced.version.epoch).not.toBe(rolledBack.version.epoch);
     expect(replaced.entry?.lifecycleRevision).toBe("new-lifecycle");
+    expect(replaced.entry?.model).toBe("updated-model");
+    expect(replaced.hasBoard).toBe(true);
   });
 });

@@ -210,7 +210,6 @@ export function createSessionActorWorker(
       const working = forkSessionActorStoredState(before);
       replaceParticipants(working, participants);
       working.hot.version = { ...before.hot.version, sequence: before.hot.version.sequence + 1 };
-      working.hot = projectSessionActorHotState(working);
       const pendingToken = readSqliteDatabasePendingScopedWriteToken(
         database.db,
         scopes(working.hot.target, working.hot.dependencySessionIds),
@@ -255,9 +254,8 @@ export function createSessionActorWorker(
         },
         window: postimage.window,
       });
-      working.hasBoard = postimage.sideTables.hasBoard;
+      working.hasBoard = working.hot.hasBoard = postimage.sideTables.hasBoard;
       working.hot.version = { ...before.hot.version, sequence: before.hot.version.sequence + 1 };
-      working.hot = projectSessionActorHotState(working);
       const pendingToken = readSqliteDatabasePendingScopedWriteToken(
         database.db,
         scopes(working.hot.target, working.hot.dependencySessionIds),
