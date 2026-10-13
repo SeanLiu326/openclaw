@@ -281,7 +281,8 @@ suite.define(() => {
           agentId: "main",
           key: "agent:main:main",
         });
-        await page.clock.fastForward(5_001);
+        // Let queued replies release background admission within the collection window.
+        await page.clock.runFor(5_001);
         await expect.poll(async () => (await activityReads()).length).toBe(initialReads + 1);
         for (let index = 0; index < 3; index += 1) {
           await gateway.emitGatewayEvent("sessions.changed", {
