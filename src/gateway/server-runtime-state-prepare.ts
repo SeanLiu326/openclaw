@@ -125,7 +125,11 @@ export async function prepareGatewayKernelState(params: {
     getPluginRegistry: () => pluginRuntime.registry,
     hostDesktopService,
   });
-  await startupTrace.measure("device-identity", () => loadOrCreateProcessDeviceIdentityAsync());
+  await startupTrace.measure("device-identity", () =>
+    loadOrCreateProcessDeviceIdentityAsync().catch(() => {
+      // Chat fingerprints are optional; admission owns the bounded unavailability warning.
+    }),
+  );
   const workerEnvironmentRuntime = workerEnvironmentStartup
     ? await startupTrace.measure("worker-environments.runtime-imports", async () => {
         const workerModule = await import("./server-worker-environment-startup.js");
