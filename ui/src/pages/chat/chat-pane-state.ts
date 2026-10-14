@@ -6,11 +6,12 @@ import {
   resolveControlUiFollowUpMode,
   resolveControlUiServerQueueMode,
 } from "../../lib/chat/follow-up-mode.ts";
+import { currentDisplayRuntimeConfig } from "../../lib/config/config-state-model.ts";
 import { getChatHistoryLoadState } from "./chat-history-state.ts";
 import { chatSendPendingReason } from "./chat-send-support.ts";
 import type { ChatState } from "./chat-state-contract.ts";
 import type { ChatPageHost } from "./chat-state-host.ts";
-import type { ChatProps } from "./chat-view.ts";
+import type { ChatProps } from "./chat-view.tsx";
 
 export function createChatPaneRunRecoveryActions(
   state: Pick<
@@ -197,7 +198,7 @@ export function resolveChatPaneFollowUpMode(
 ) {
   return resolveControlUiFollowUpMode(
     state.settings.chatFollowUpMode,
-    resolveControlUiServerQueueMode(runtimeConfig.configSnapshot?.runtimeConfig, {
+    resolveControlUiServerQueueMode(currentDisplayRuntimeConfig(runtimeConfig), {
       configNeedsApply: runtimeConfig.configNeedsApply,
       effectiveMode: state.chatEffectiveQueueMode,
       sessionMetadataLoaded: session !== undefined || state.chatEffectiveQueueMode !== undefined,
