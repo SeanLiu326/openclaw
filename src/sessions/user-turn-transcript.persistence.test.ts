@@ -169,6 +169,27 @@ describe("persistUserTurnTranscript", () => {
     expect(persisted).not.toHaveProperty("__openclaw.workContext");
   });
 
+  it("resolves committed hook metadata and redacted content for runtime replay", async () => {
+    const target = createSqliteTranscriptTarget({ dir: sessionDirs.make() });
+    const recorder = createUserTurnTranscriptRecorder({
+      target,
+      input: { text: "original input", timestamp: 123, idempotencyKey: "prepared:user" },
+      beforeMessageWrite: ({ message }) => ({
+        ...message,
+        content: "[redacted]",
+        __openclaw: { chatRequestIdentity: "admitted-request" },
+      }),
+    });
+    await recorder.persistApproved();
+    await expect(recorder.resolveMessage()).resolves.toEqual({
+      role: "user",
+      content: "[redacted]",
+      timestamp: 123,
+      idempotencyKey: "prepared:user",
+      __openclaw: { chatRequestIdentity: "admitted-request" },
+    });
+  });
+
   it("round-trips source text and attachments byte-identically despite logging patterns", async () => {
     const dir = sessionDirs.make();
     const target = createSqliteTranscriptTarget({ dir });
