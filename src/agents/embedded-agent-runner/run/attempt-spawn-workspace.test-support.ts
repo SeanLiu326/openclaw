@@ -1150,8 +1150,6 @@ export async function createContextEngineAttemptRunner(params: {
     session.setActiveToolsByName(options.tools);
     // Nested tool observations append through the same manager the runner prepared.
     session.sessionManager = options.sessionManager;
-    session.setActiveToolsByName(options.tools);
-    session.setBaseSystemPrompt(options.systemPrompt);
     if (session.agent.streamFn) {
       bindStreamLlmRuntime(session.agent.streamFn, modelRuntime);
     }
