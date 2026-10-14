@@ -4157,6 +4157,7 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
       timestamp: expect.any(Number),
       idempotencyKey: "idem-system-provenance-acp:user",
       __openclaw: {
+        chatRequestIdentity: expect.stringMatching(/^[a-f0-9]{64}$/u),
         senderIsOwner: true,
         transport: { clients: [{ id: "cli", mode: "cli", displayName: "ACP" }] },
       },
@@ -4308,6 +4309,7 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
         timestamp: expect.any(Number),
         idempotencyKey: "idem-user-transcript-acp-images:user",
         __openclaw: {
+          chatRequestIdentity: expect.stringMatching(/^[a-f0-9]{64}$/u),
           transport: { clients: [{ id: "cli", mode: "cli", displayName: "ACP" }] },
         },
       });
