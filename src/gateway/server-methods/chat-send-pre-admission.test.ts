@@ -369,6 +369,30 @@ describe("chat send retry identity", () => {
     },
   );
 
+  it.each(["mentions", "work context"] as const)(
+    "keeps a missing %s retry unverifiable without RAM fingerprints",
+    async (annotation) => {
+      const params = retryFixture(`unkeyed-${annotation}`);
+      params.request.requestIdentity = undefined;
+      if (annotation === "work context") {
+        params.request.mentions = undefined;
+        params.request.workContext = {
+          snapshot: { page: "chat" },
+          text: params.request.rawMessage,
+        };
+      }
+      params.context.dedupe.set(`chat:${params.session.clientRunId}`, {
+        ts: 100,
+        ok: true,
+        payload: { runId: params.session.clientRunId, status: "ok" },
+      });
+      vi.mocked(readSessionSubmittedInput).mockResolvedValue(null);
+      expect(respondChatSendRetry(params, await prepareChatSendRetryComparison(params))).toBe(true);
+      expectConflict(params.respond);
+      expect(readSessionSubmittedInput).toHaveBeenCalledOnce();
+    },
+  );
+
   it("rejects a keyed plain-text retry after the device identity changes", async () => {
     const params = retryFixture("rotated-device-identity");
     params.request.mentions = undefined;

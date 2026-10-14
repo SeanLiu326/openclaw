@@ -61,15 +61,14 @@ describe("normalizeChatSendRequest", () => {
     });
   });
 
-  it("rejects an unverifiable request when the Gateway identity is missing", async () => {
+  it("normalizes a first-time send without a fingerprint when the Gateway identity is missing", async () => {
     vi.mocked(loadChatRequestIdentityKeyAsync).mockResolvedValueOnce(null);
-    await expect(
-      normalizeChatSendRequest({ params: validParams(), client: null }),
-    ).resolves.toMatchObject({
-      ok: false,
-      reason: "chat-request-conflict",
-      error: expect.stringContaining("device identity is unavailable"),
-    });
+    const result = await normalizeChatSendRequest({ params: validParams(), client: null });
+    expect(result).toMatchObject({ ok: true, value: { rawMessage: "hello" } });
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+    expect(result.value).not.toHaveProperty("requestIdentity");
   });
 
   it("keeps Stop normalization synchronous", () => {

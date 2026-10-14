@@ -4,6 +4,7 @@ import {
   resolveSqliteScope,
   toDatabaseOptions,
 } from "../../config/sessions/session-accessor.sqlite-scope.js";
+import { loadDeviceIdentityIfPresentAsync } from "../../infra/device-identity-async.js";
 import {
   closeOpenClawAgentDatabaseByPathAsync,
   resolveOpenClawAgentSqlitePath,
@@ -18,16 +19,31 @@ registerAgentSessionLoopTestLifecycle();
 const createFixture = useBrowserFollowupFixture();
 
 describe("chat.send persisted request identity", () => {
-  it.each([true, false])(
-    "replays unchanged input and rejects edits after SQLite reopens and RAM identity expires (original text retained: %s)",
-    async (preserveContent) => {
-      const fixture = await createFixture({ preserveContent });
+  it.each([
+    { preserveContent: true, deviceIdentity: true },
+    { preserveContent: false, deviceIdentity: true },
+    { preserveContent: true, deviceIdentity: false },
+  ])(
+    "preserves retry comparison after SQLite reopens and RAM identity expires (original text retained: $preserveContent, device identity: $deviceIdentity)",
+    async ({ preserveContent, deviceIdentity }) => {
+      const fixture = await createFixture({ preserveContent, deviceIdentity });
       try {
+        if (!deviceIdentity) {
+          expect(await loadDeviceIdentityIfPresentAsync()).toBeNull();
+        }
         const first = await fixture.send();
         expect(first.mock.calls[0]?.[0]).toBe(true);
         const recorder = await fixture.dispatchedRecorder;
         const committed = await recorder.persistApproved();
         expect(committed?.appended).toBe(true);
+        if (deviceIdentity) {
+          expect(committed?.message).toHaveProperty(
+            "__openclaw.chatRequestIdentity",
+            expect.stringMatching(/^[a-f0-9]{64}$/u),
+          );
+        } else {
+          expect(committed?.message).not.toHaveProperty("__openclaw.chatRequestIdentity");
+        }
         expect(committed?.message.content).toBe(
           preserveContent ? fixture.params.message : fixture.approvedContent,
         );
@@ -47,7 +63,7 @@ describe("chat.send persisted request identity", () => {
         dispatchInboundMessageMock.mockClear();
 
         const replay = await fixture.send();
-        expect(replay).toHaveBeenCalledWith(
+        const replayResponse = [
           true,
           expect.objectContaining({
             runId: fixture.params.idempotencyKey,
@@ -56,18 +72,23 @@ describe("chat.send persisted request identity", () => {
           }),
           undefined,
           expect.objectContaining({ cached: true }),
-        );
+        ] as const;
+        expect(replay).toHaveBeenCalledWith(...replayResponse);
         fixture.context.dedupe.clear();
         fixture.params.message += " Edited input.";
-        const conflict = await fixture.send();
-        expect(conflict).toHaveBeenCalledWith(
-          false,
-          undefined,
-          expect.objectContaining({
-            code: "INVALID_REQUEST",
-            details: { reason: "chat-request-conflict" },
-          }),
-        );
+        const edited = await fixture.send();
+        if (deviceIdentity) {
+          expect(edited).toHaveBeenCalledWith(
+            false,
+            undefined,
+            expect.objectContaining({
+              code: "INVALID_REQUEST",
+              details: { reason: "chat-request-conflict" },
+            }),
+          );
+        } else {
+          expect(edited).toHaveBeenCalledWith(...replayResponse);
+        }
         expect(dispatchInboundMessageMock).not.toHaveBeenCalled();
       } finally {
         await fixture.cleanup();

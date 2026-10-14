@@ -1,6 +1,5 @@
 import { createHmac } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { sha256Hex } from "@openclaw/normalization-core/node-crypto";
 import type { Static } from "typebox";
 import {
   GATEWAY_CLIENT_CAPS,
@@ -80,7 +79,7 @@ export type NormalizedChatSendRequest = {
   normalizedAttachments: ChatAttachment[];
   rawMessage: string;
   /** Submitted annotation identity is immutable even when profile aliases later merge. */
-  requestIdentity: string;
+  requestIdentity?: string;
   mentions?: HumanMention[];
   workContext?: AttachedChatWorkContext;
   reconnectResumeRequested: boolean;
@@ -291,7 +290,7 @@ export function normalizeChatSendRequest(params: {
     ...(providerReview ? [providerReview.review.id, providerReview.target.sessionId] : []),
   ]);
 
-  const value: Omit<NormalizedChatSendRequest, "requestIdentity"> = {
+  const value: NormalizedChatSendRequest = {
     chatSendReceivedAtMs,
     clientInfo,
     supportsTaskSuggestions,
@@ -315,20 +314,13 @@ export function normalizeChatSendRequest(params: {
     reconnectResumeRequested: controlUiReconnectResume.resumeRequested,
   };
   if (stopCommand) {
-    return { ok: true, value: { ...value, requestIdentity: sha256Hex(requestInput) } };
+    return { ok: true, value };
   }
   return loadChatRequestIdentityKeyAsync().then((key) => {
-    if (!key) {
-      return {
-        ok: false as const,
-        error:
-          "The chat request cannot be verified because the Gateway device identity is unavailable. Restore the device identity and restart the Gateway before retrying.",
-        reason: "chat-request-conflict",
-      };
-    }
     // A keyed verifier survives redaction without storing an offline prompt digest.
-    const requestIdentity = createHmac("sha256", key).update(requestInput).digest("hex");
-    const request = { ...value, requestIdentity };
+    const request: NormalizedChatSendRequest = key
+      ? { ...value, requestIdentity: createHmac("sha256", key).update(requestInput).digest("hex") }
+      : value;
     if (p.intent && !params.goalResume) {
       const goalStart = {
         action: "start" as const,

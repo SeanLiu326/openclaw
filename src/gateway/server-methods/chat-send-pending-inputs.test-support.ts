@@ -71,12 +71,15 @@ export function useBrowserFollowupFixture() {
       createdActor?: SessionCreatedActor;
       sandbox?: "required";
       preserveContent?: boolean;
+      deviceIdentity?: boolean;
       transientProjectionFailures?: number;
       persistDuringDispatch?: boolean;
       storage?: "durable" | "memory";
     } = {},
   ) {
-    await loadOrCreateProcessDeviceIdentityAsync();
+    if (options.deviceIdentity !== false) {
+      await loadOrCreateProcessDeviceIdentityAsync();
+    }
     const active = options.active !== false;
     const storePath = path.join(temporaryDirs.make("openclaw-chat-custody-"), "sessions.json");
     testState.sessionStorePath = storePath;

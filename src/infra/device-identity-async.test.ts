@@ -25,6 +25,7 @@ type IdentityOperationOptions = {
 };
 
 const boundary = vi.hoisted(() => ({
+  warn: vi.fn(),
   run: vi.fn<
     (
       context: OpenClawStateWorkerContext,
@@ -37,6 +38,17 @@ const boundary = vi.hoisted(() => ({
     throw new Error("Native storage is outside this pure async identity control");
   },
 }));
+
+vi.mock("../logging/subsystem.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../logging/subsystem.js")>();
+  return {
+    ...actual,
+    createSubsystemLogger: (...args: Parameters<typeof actual.createSubsystemLogger>) => ({
+      ...actual.createSubsystemLogger(...args),
+      warn: boundary.warn,
+    }),
+  };
+});
 
 // Retain pure path resolution without config/paths' process-wide path initialization.
 vi.mock("../config/paths.js", async () => {
@@ -110,29 +122,27 @@ describe("async device identity boundary", () => {
     expect(boundary.run).toHaveBeenCalledOnce();
   });
 
-  it.each([null, undefined])(
-    "does not create a chat key for an absent identity (%s)",
-    async (result) => {
-      const options = syntheticOptions("missing-chat-request-key");
-      boundary.run.mockImplementation(async (_context, _operation, opening) => {
-        expect(opening).toEqual({ existingOnly: true });
-        return result;
+  it("warns once for missing or unreadable chat identity without creating or caching a replacement", async () => {
+    const options = syntheticOptions("unavailable-chat-request-key");
+    boundary.run
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("synthetic identity read failure"))
+      .mockResolvedValueOnce({
+        ...identity,
+        privateKeyPem: ed25519PrivateKeyPemFromRaw(Buffer.alloc(32, 8)),
       });
+    for (let attempt = 0; attempt < 3; attempt++) {
       await expect(loadChatRequestIdentityKeyAsync(options)).resolves.toBeNull();
-      expect(boundary.run).toHaveBeenCalledOnce();
-    },
-  );
-
-  it("propagates identity read failures without creating a replacement or caching the failure", async () => {
-    const options = syntheticOptions("failed-chat-request-key");
-    const failure = new Error("synthetic identity read failure");
-    boundary.run.mockRejectedValueOnce(failure).mockResolvedValueOnce(null);
-    await expect(loadChatRequestIdentityKeyAsync(options)).rejects.toBe(failure);
-    await expect(loadChatRequestIdentityKeyAsync(options)).resolves.toBeNull();
+    }
+    await expect(loadChatRequestIdentityKeyAsync(options)).resolves.toHaveLength(32);
     for (const call of boundary.run.mock.calls) {
       expect(call[2]).toEqual({ existingOnly: true });
     }
-    expect(boundary.run).toHaveBeenCalledTimes(2);
+    expect(boundary.run).toHaveBeenCalledTimes(4);
+    expect(boundary.warn).toHaveBeenCalledExactlyOnceWith(
+      'Gateway device identity "primary" is missing or unreadable; chat.send will continue without a keyed request fingerprint.',
+    );
   });
 
   it.each([
