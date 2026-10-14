@@ -1,5 +1,6 @@
 // User turn transcript tests cover transcript extraction for user turns.
 import path from "node:path";
+import { sha256Hex } from "@openclaw/normalization-core/node-crypto";
 import { castAgentMessage } from "openclaw/plugin-sdk/test-fixtures";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createDeferred } from "../../test/helpers/promise.js";
@@ -453,6 +454,7 @@ describe("user turn transcript persistence", () => {
             __openclaw: {
               humanMentions: admittedInput.mentions,
               modelPromptProjection: { version: 1, text: "enriched describe @Ada" },
+              submittedTextHash: sha256Hex("describe @Ada"),
             },
           }),
           expect.objectContaining({
@@ -568,6 +570,7 @@ describe("user turn transcript persistence", () => {
             senderId: "operator-1",
             senderName: "Operator",
             steerTargetRunId: "active-run",
+            submittedTextHash: sha256Hex("tighten the answer"),
           },
         }),
       ]);
@@ -653,6 +656,7 @@ describe("user turn transcript persistence", () => {
           __openclaw: {
             lateMedia: true,
             media: [{ path: path.join(dir, "image.png"), contentType: "image/png" }],
+            submittedTextHash: sha256Hex("resolved subtitle"),
           },
         }),
       ]);

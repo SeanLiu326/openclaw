@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { expectDefined } from "@openclaw/normalization-core";
+import { sha256Hex } from "@openclaw/normalization-core/node-crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildOpenAIResponsesParams } from "../../../../packages/ai/src/transports/openai-responses-params-internal.js";
 import { createSolidPngBuffer } from "../../../../test/helpers/image-fixtures.js";
@@ -547,7 +548,10 @@ describe("durable model prompt projection at provider dispatch", () => {
           expect.objectContaining({
             content: original.text,
             idempotencyKey: original.idempotencyKey,
-            __openclaw: { modelPromptProjection: { version: 1, text: "enriched image request" } },
+            __openclaw: {
+              modelPromptProjection: { version: 1, text: "enriched image request" },
+              submittedTextHash: sha256Hex("describe this image"),
+            },
           }),
           expect.objectContaining({
             content: "",
@@ -555,6 +559,7 @@ describe("durable model prompt projection at provider dispatch", () => {
             __openclaw: {
               lateMedia: true,
               media: [expect.objectContaining({ path: imagePath, contentType: "image/png" })],
+              submittedTextHash: sha256Hex(original.text),
             },
           }),
         ]);
