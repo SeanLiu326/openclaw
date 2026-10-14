@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { sha256Hex } from "@openclaw/normalization-core/node-crypto";
 import type { Static } from "typebox";
@@ -23,6 +24,7 @@ import {
   type AttachedChatWorkContext,
 } from "../../chat/work-context.js";
 import type { SessionGoalOperation } from "../../config/sessions/goals-operations.js";
+import { loadOrCreateProcessDeviceIdentityAsync } from "../../infra/device-identity-async.js";
 import type { InputProvenance } from "../../sessions/input-provenance.js";
 import {
   isProgressCardRefreshInputProvenance,
@@ -282,16 +284,14 @@ export function normalizeChatSendRequest(params: {
   const modelMessage = workContext
     ? [rawMessage, formatChatWorkContext(workContext.snapshot)].filter(Boolean).join("\n\n")
     : rawMessage;
-  const requestIdentity = sha256Hex(
-    JSON.stringify([
-      p.message,
-      p.mentions?.map(({ profileId, start, end }) => [profileId, start, end]) ?? [],
-      ...(workContext ? [workContext.snapshot] : []),
-      ...(providerReview ? [providerReview.review.id, providerReview.target.sessionId] : []),
-    ]),
-  );
+  const requestInput = JSON.stringify([
+    p.message,
+    p.mentions?.map(({ profileId, start, end }) => [profileId, start, end]) ?? [],
+    ...(workContext ? [workContext.snapshot] : []),
+    ...(providerReview ? [providerReview.review.id, providerReview.target.sessionId] : []),
+  ]);
 
-  const value: NormalizedChatSendRequest = {
+  const value: Omit<NormalizedChatSendRequest, "requestIdentity"> = {
     chatSendReceivedAtMs,
     clientInfo,
     supportsTaskSuggestions,
@@ -311,23 +311,33 @@ export function normalizeChatSendRequest(params: {
     turnKind,
     normalizedAttachments,
     rawMessage: modelMessage,
-    requestIdentity,
     ...(mentions.value ? { mentions: mentions.value } : {}),
     reconnectResumeRequested: controlUiReconnectResume.resumeRequested,
   };
-  if (p.intent && !params.goalResume) {
-    const goalStart = {
-      action: "start" as const,
-      operationId: p.idempotencyKey,
-      issuedAtMs: p.intent.issuedAtMs,
-      objective: p.message,
-    };
-    return fingerprintSessionGoalRequest([p, hasGatewayAdminScope(client)]).then(
-      (requestFingerprint) => ({
-        ok: true,
-        value: { ...value, goalOperation: { ...goalStart, requestFingerprint } },
-      }),
-    );
+  if (stopCommand) {
+    return { ok: true, value: { ...value, requestIdentity: sha256Hex(requestInput) } };
   }
-  return { ok: true, value };
+  return loadOrCreateProcessDeviceIdentityAsync().then((identity) => {
+    // A keyed verifier survives redaction without storing an offline prompt digest.
+    const requestIdentity = createHmac("sha256", identity.privateKeyPem)
+      .update("openclaw.chat.request.v1\0")
+      .update(requestInput)
+      .digest("hex");
+    const request = { ...value, requestIdentity };
+    if (p.intent && !params.goalResume) {
+      const goalStart = {
+        action: "start" as const,
+        operationId: p.idempotencyKey,
+        issuedAtMs: p.intent.issuedAtMs,
+        objective: p.message,
+      };
+      return fingerprintSessionGoalRequest([p, hasGatewayAdminScope(client)]).then(
+        (requestFingerprint) => ({
+          ok: true,
+          value: { ...request, goalOperation: { ...goalStart, requestFingerprint } },
+        }),
+      );
+    }
+    return { ok: true as const, value: request };
+  });
 }

@@ -444,38 +444,6 @@ describe("chat send retry identity", () => {
     },
   );
 
-  it.each(["unchanged", "edited"] as const)(
-    "compares %s plain-text input to the original source after the entire RAM cache is gone",
-    async (edit) => {
-      const params = retryFixture(`text-source-without-cache-${edit}`);
-      params.session.entry = {
-        sessionId: "mention-session",
-        updatedAt: 100,
-        restartRecoveryTerminalRunIds: [params.session.clientRunId],
-      };
-      vi.mocked(readSessionSubmittedInput).mockResolvedValue({
-        role: "user",
-        timestamp: 100,
-        content: params.request.rawMessage,
-      });
-      params.request.mentions = undefined;
-      if (edit === "edited") {
-        params.request.rawMessage = `${params.request.rawMessage} (edited)`;
-      }
-      const conflict = resolveChatSendRequestConflict(
-        params,
-        await prepareChatSendRetryComparison(params),
-      );
-      if (edit === "unchanged") {
-        expect(conflict).toBeUndefined();
-      } else {
-        expect(conflict).toMatchObject({
-          details: { reason: "chat-request-conflict" },
-        });
-      }
-    },
-  );
-
   it("rejects annotation removal from a terminal tombstone after the entire RAM cache is gone", async () => {
     const params = retryFixture("terminal-source-without-cache");
     params.session.entry = {

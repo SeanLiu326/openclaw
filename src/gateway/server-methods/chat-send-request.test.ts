@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { normalizeChatSendRequest } from "./chat-send-request.js";
 import type { GatewayRequestHandlerOptions } from "./types.js";
+
+vi.mock("../../infra/device-identity-async.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../infra/device-identity-async.js")>()),
+  loadOrCreateProcessDeviceIdentityAsync: vi.fn(async () => ({
+    deviceId: "request-identity-fixture",
+    privateKeyPem: "synthetic-request-verifier-key",
+  })),
+}));
 
 function copilotClient(caps: string[] = []): NonNullable<GatewayRequestHandlerOptions["client"]> {
   return {
@@ -42,6 +50,15 @@ function humanClient(): NonNullable<GatewayRequestHandlerOptions["client"]> {
 }
 
 describe("normalizeChatSendRequest", () => {
+  it("keeps Stop normalization synchronous", () => {
+    expect(
+      normalizeChatSendRequest({
+        params: validParams({ message: "/stop" }),
+        client: humanClient(),
+      }),
+    ).toMatchObject({ ok: true, value: { stopCommand: true } });
+  });
+
   it.each([{ page: "chat", title: "Parser work", sessionKey: "agent:main:parser" }])(
     "keeps $page context out of authored text while preserving the model payload",
     async (workContext) => {
@@ -88,10 +105,10 @@ describe("normalizeChatSendRequest", () => {
     ).toBe(false);
   });
 
-  it("normalizes ordinary chat and selected mention spans without yielding", () => {
+  it("normalizes ordinary chat and selected mention spans before fingerprinting", async () => {
     const message = "  e\u0301 @Zoe\u0308 🌈  ";
     const mentions = [{ profileId: "zoe", start: 5, end: 10 }];
-    const result = normalizeChatSendRequest({
+    const result = await normalizeChatSendRequest({
       params: validParams({ message, mentions }),
       client: humanClient(),
     });
