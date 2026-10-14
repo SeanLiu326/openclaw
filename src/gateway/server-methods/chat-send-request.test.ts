@@ -1,4 +1,6 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
+import { loadChatRequestIdentityKeyAsync } from "../../infra/device-identity-async.js";
 import { normalizeChatSendRequest } from "./chat-send-request.js";
 import type { GatewayRequestHandlerOptions } from "./types.js";
 
@@ -8,6 +10,7 @@ vi.mock("../../infra/device-identity-async.js", async (importOriginal) => ({
     deviceId: "request-identity-fixture",
     privateKeyPem: "synthetic-request-verifier-key",
   })),
+  loadChatRequestIdentityKeyAsync: vi.fn(async (): Promise<Buffer | null> => Buffer.alloc(32, 7)),
 }));
 
 function copilotClient(caps: string[] = []): NonNullable<GatewayRequestHandlerOptions["client"]> {
@@ -50,6 +53,29 @@ function humanClient(): NonNullable<GatewayRequestHandlerOptions["client"]> {
 }
 
 describe("normalizeChatSendRequest", () => {
+  it("fingerprints input with the purpose-specific identity key", async () => {
+    const result = await normalizeChatSendRequest({ params: validParams(), client: null });
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        requestIdentity: createHmac("sha256", Buffer.alloc(32, 7))
+          .update(JSON.stringify([" hello ", []]))
+          .digest("hex"),
+      },
+    });
+  });
+
+  it("rejects an unverifiable request when the Gateway identity is missing", async () => {
+    vi.mocked(loadChatRequestIdentityKeyAsync).mockResolvedValueOnce(null);
+    await expect(
+      normalizeChatSendRequest({ params: validParams(), client: null }),
+    ).resolves.toMatchObject({
+      ok: false,
+      reason: "chat-request-conflict",
+      error: expect.stringContaining("device identity is unavailable"),
+    });
+  });
+
   it("keeps Stop normalization synchronous", () => {
     expect(
       normalizeChatSendRequest({

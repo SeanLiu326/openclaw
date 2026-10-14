@@ -24,7 +24,7 @@ import {
   type AttachedChatWorkContext,
 } from "../../chat/work-context.js";
 import type { SessionGoalOperation } from "../../config/sessions/goals-operations.js";
-import { loadOrCreateProcessDeviceIdentityAsync } from "../../infra/device-identity-async.js";
+import { loadChatRequestIdentityKeyAsync } from "../../infra/device-identity-async.js";
 import type { InputProvenance } from "../../sessions/input-provenance.js";
 import {
   isProgressCardRefreshInputProvenance,
@@ -317,12 +317,17 @@ export function normalizeChatSendRequest(params: {
   if (stopCommand) {
     return { ok: true, value: { ...value, requestIdentity: sha256Hex(requestInput) } };
   }
-  return loadOrCreateProcessDeviceIdentityAsync().then((identity) => {
+  return loadChatRequestIdentityKeyAsync().then((key) => {
+    if (!key) {
+      return {
+        ok: false as const,
+        error:
+          "The chat request cannot be verified because the Gateway device identity is unavailable. Restore the device identity and restart the Gateway before retrying.",
+        reason: "chat-request-conflict",
+      };
+    }
     // A keyed verifier survives redaction without storing an offline prompt digest.
-    const requestIdentity = createHmac("sha256", identity.privateKeyPem)
-      .update("openclaw.chat.request.v1\0")
-      .update(requestInput)
-      .digest("hex");
+    const requestIdentity = createHmac("sha256", key).update(requestInput).digest("hex");
     const request = { ...value, requestIdentity };
     if (p.intent && !params.goalResume) {
       const goalStart = {

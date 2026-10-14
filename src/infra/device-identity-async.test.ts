@@ -1,13 +1,16 @@
+import { hkdfSync } from "node:crypto";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferredCore } from "../shared/deferred.js";
 import type { OpenClawStateWorkerContext } from "../state/openclaw-state-worker-context.types.js";
 import {
+  loadChatRequestIdentityKeyAsync,
   loadDeviceIdentityIfPresentAsync,
   loadOrCreateDeviceIdentityAsync,
   loadOrCreateProcessDeviceIdentityAsync,
 } from "./device-identity-async.js";
 import type { DeviceIdentity, DeviceIdentityStoreOptions } from "./device-identity-store.js";
+import { ed25519PrivateKeyPemFromRaw } from "./ed25519-signature.js";
 
 type IdentityCommand = {
   type: "deviceIdentity.load" | "deviceIdentity.read";
@@ -81,6 +84,57 @@ beforeEach(() => {
 });
 
 describe("async device identity boundary", () => {
+  it("derives and caches a chat-only key from persisted raw Ed25519 bytes", async () => {
+    const options = syntheticOptions("chat-request-key");
+    const privateKey = Buffer.alloc(32, 7);
+    boundary.run.mockImplementation(async (_context, operation, opening) => {
+      expect(opening).toEqual({ existingOnly: true });
+      return operation({
+        execute: async (command) => {
+          expect(command).toEqual({
+            type: "deviceIdentity.read",
+            input: { identityKey: "primary" },
+          });
+          return { ...identity, privateKeyPem: ed25519PrivateKeyPemFromRaw(privateKey) };
+        },
+      });
+    });
+    const key = await loadChatRequestIdentityKeyAsync(options);
+    expect(key).toEqual(
+      Buffer.from(
+        hkdfSync("sha256", privateKey, "openclaw.device-identity", "openclaw.chat.request.v1", 32),
+      ),
+    );
+    expect(key).not.toEqual(privateKey);
+    expect(await loadChatRequestIdentityKeyAsync(options)).toBe(key);
+    expect(boundary.run).toHaveBeenCalledOnce();
+  });
+
+  it.each([null, undefined])(
+    "does not create a chat key for an absent identity (%s)",
+    async (result) => {
+      const options = syntheticOptions("missing-chat-request-key");
+      boundary.run.mockImplementation(async (_context, _operation, opening) => {
+        expect(opening).toEqual({ existingOnly: true });
+        return result;
+      });
+      await expect(loadChatRequestIdentityKeyAsync(options)).resolves.toBeNull();
+      expect(boundary.run).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("propagates identity read failures without creating a replacement or caching the failure", async () => {
+    const options = syntheticOptions("failed-chat-request-key");
+    const failure = new Error("synthetic identity read failure");
+    boundary.run.mockRejectedValueOnce(failure).mockResolvedValueOnce(null);
+    await expect(loadChatRequestIdentityKeyAsync(options)).rejects.toBe(failure);
+    await expect(loadChatRequestIdentityKeyAsync(options)).resolves.toBeNull();
+    for (const call of boundary.run.mock.calls) {
+      expect(call[2]).toEqual({ existingOnly: true });
+    }
+    expect(boundary.run).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     { mode: "create", explicitPath: false },
     { mode: "read", explicitPath: true },

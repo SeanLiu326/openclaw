@@ -30,6 +30,7 @@ import { clearSessionStoreCacheForTest } from "../config/sessions/store-writer-s
 import type { SessionEntry, SessionOrigin } from "../config/sessions/types.js";
 import type { OpenClawConfig } from "../config/types.js";
 import { resetAgentEventsForTest } from "../infra/agent-events.js";
+import { loadOrCreateProcessDeviceIdentityAsync } from "../infra/device-identity-async.js";
 import {
   loadOrCreateDeviceIdentity,
   publicKeyRawBase64UrlFromPem,
@@ -438,6 +439,7 @@ async function resetGatewayTestState(options: { uniqueConfigRoot: boolean }) {
   resetSystemEventsForTest();
   resetAgentEventsForTest();
   await resetPreparedModelCatalogStateForTest();
+  await loadOrCreateProcessDeviceIdentityAsync();
   gatewayReplyRuntimePrepared = false;
 }
 

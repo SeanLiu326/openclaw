@@ -2,6 +2,7 @@ import { captureOpenClawStateWorkerContext } from "../state/openclaw-state-worke
 import { runOpenClawStateWorkerOperation } from "../state/openclaw-state-worker-store.js";
 import {
   cacheProcessDeviceIdentity,
+  getChatRequestIdentityKey,
   readProcessDeviceIdentity,
 } from "./device-identity-process-cache.js";
 import {
@@ -40,6 +41,20 @@ export async function loadOrCreateProcessDeviceIdentityAsync(
     identityKey,
   });
   return cacheProcessDeviceIdentity(cacheKey, identity);
+}
+
+/** Chat admission consumes an existing identity without creating or replacing one. */
+export async function loadChatRequestIdentityKeyAsync(
+  options: DeviceIdentityStoreOptions = {},
+): Promise<Buffer | null> {
+  const { databasePath, identityKey } = resolveDeviceIdentityStore(options);
+  const cacheKey = `${databasePath}\0${identityKey}`;
+  const identity =
+    readProcessDeviceIdentity(cacheKey) ??
+    (await loadDeviceIdentityIfPresentAsync({ ...options, path: databasePath, identityKey }));
+  return identity
+    ? getChatRequestIdentityKey(cacheProcessDeviceIdentity(cacheKey, identity))
+    : null;
 }
 
 /** Read the captured identity on the shared worker without creating SQLite state. */
