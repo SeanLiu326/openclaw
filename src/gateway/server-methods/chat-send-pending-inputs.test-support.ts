@@ -16,6 +16,7 @@ import { memorySessionActorOwners } from "../../config/sessions/session-actor-me
 import { withSessionActorStorage } from "../../config/sessions/session-actor-storage-binding.js";
 import type { SessionCreatedActor } from "../../config/sessions/session-entry-provenance.js";
 import { SessionTranscriptProjectionUnavailableError } from "../../config/sessions/session-transcript-projection-error.js";
+import { loadOrCreateProcessDeviceIdentityAsync } from "../../infra/device-identity-async.js";
 import { initializeGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { withPluginRuntimeGatewayRequestScope } from "../../plugins/runtime/gateway-request-scope.js";
 import type { PluginHookBeforeMessageWriteEvent } from "../../plugins/types.js";
@@ -75,6 +76,7 @@ export function useBrowserFollowupFixture() {
       storage?: "durable" | "memory";
     } = {},
   ) {
+    await loadOrCreateProcessDeviceIdentityAsync();
     const active = options.active !== false;
     const storePath = path.join(temporaryDirs.make("openclaw-chat-custody-"), "sessions.json");
     testState.sessionStorePath = storePath;

@@ -45,6 +45,7 @@ import { waitForSessionTranscriptIndexReconcile } from "../../config/sessions/se
 import { resolveSessionTranscriptActiveLeafEntryId } from "../../config/sessions/transcript-tree.js";
 import { withOwnedSessionTranscriptWrites } from "../../config/sessions/transcript-write-context.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { loadOrCreateProcessDeviceIdentityAsync } from "../../infra/device-identity-async.js";
 import { createStructuredOutboundPayloadPlan } from "../../infra/outbound/payloads.js";
 import { RUN_STALE_TAKEOVER_MS } from "../../logging/diagnostic-run-activity.js";
 import {
@@ -1126,13 +1127,14 @@ beforeEach(({ signal }) => {
   testSignal = signal;
 });
 
-beforeAll(() => {
+beforeAll(async () => {
   suiteResources = createChatDirectiveSuiteResources();
   suiteFixtureRoot = suiteResources.root;
   suiteDatabasePath = suiteResources.databasePath;
   suiteFixtureEnv = suiteResources.env;
   mockState.storePath = suiteDatabasePath;
   suiteResources.open();
+  await loadOrCreateProcessDeviceIdentityAsync();
 });
 
 afterEach(async () => {

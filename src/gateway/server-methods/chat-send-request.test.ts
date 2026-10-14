@@ -6,10 +6,6 @@ import type { GatewayRequestHandlerOptions } from "./types.js";
 
 vi.mock("../../infra/device-identity-async.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../infra/device-identity-async.js")>()),
-  loadOrCreateProcessDeviceIdentityAsync: vi.fn(async () => ({
-    deviceId: "request-identity-fixture",
-    privateKeyPem: "synthetic-request-verifier-key",
-  })),
   loadChatRequestIdentityKeyAsync: vi.fn(async (): Promise<Buffer | null> => Buffer.alloc(32, 7)),
 }));
 
