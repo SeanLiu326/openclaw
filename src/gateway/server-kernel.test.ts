@@ -895,11 +895,10 @@ describe("createGatewayKernel", () => {
       expect(getActiveGatewayRootWorkCount()).toBe(0);
 
       flushDiagnosticsTimeline();
-      const timeline = (await fs.readFile(timelinePath, "utf8"))
+      const measureNames = (await fs.readFile(timelinePath, "utf8"))
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line) as Record<string, unknown>);
-      const measureNames = timeline
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
         .filter((event) => event.type === "span.start" && event.phase === "startup")
         .map((event) => {
           const attributes = event.attributes as { traceName?: string } | undefined;
