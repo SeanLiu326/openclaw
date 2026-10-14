@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { sha256Hex } from "@openclaw/normalization-core/node-crypto";
 import { readSessionSubmittedInput } from "../../config/sessions/session-accessor.js";
 import { SessionTranscriptProjectionUnavailableError } from "../../config/sessions/session-transcript-projection-error.js";
 import { extractTextFromChatContent } from "../../shared/chat-content.js";
@@ -65,8 +66,19 @@ export function compareChatSendSubmittedInput(
       joinWith: "\n",
       normalizeText: (text) => text,
     }) ?? "";
+  // Preferred evidence: the admitted input's own hash. Supported before_message_write
+  // hooks may rewrite persisted content (e.g. redaction) without changing the request,
+  // so rewritten stored bytes must not fail an unchanged retry; the hash also never
+  // restores unredacted text. Records without the hash fall back to stored text.
+  const storedTextHash =
+    typeof submitted["__openclaw"]?.submittedTextHash === "string"
+      ? (submitted["__openclaw"]?.submittedTextHash as string)
+      : undefined;
+  const textMatches = storedTextHash
+    ? sha256Hex(request.rawMessage) === storedTextHash
+    : storedText === request.rawMessage;
   return (
-    storedText !== request.rawMessage ||
+    !textMatches ||
     !isDeepStrictEqual(storedMentions ?? [], request.mentions ?? []) ||
     !isDeepStrictEqual(storedContext, request.workContext)
   );

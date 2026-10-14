@@ -5,6 +5,12 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { afterEach, describe, expect, it } from "vitest";
 import { clearConfigCache, clearRuntimeConfigSnapshot } from "../src/config/config.js";
+import { resolveSessionStorePathCore } from "../src/config/sessions.js";
+import { hasRestartRecoveryTerminalRun } from "../src/config/sessions/restart-recovery-state.js";
+import {
+  loadSessionEntry,
+  readSessionSubmittedInput,
+} from "../src/config/sessions/session-accessor.js";
 import { clearSessionStoreCacheForTest } from "../src/config/sessions/store-writer-state.js";
 import {
   disconnectGatewayClient,
@@ -89,6 +95,12 @@ function sleep(ms: number): Promise<void> {
     setTimeout(resolve, ms);
   });
 }
+
+// A supported before_message_write plugin hook rewrites the persisted user turn
+// (like a redaction plugin) while keeping its idempotency key. Comparison evidence
+// must therefore come from the admitted input hash, not the rewritten transcript bytes.
+const PERSISTED_SUFFIX = " [persisted copy rewritten by test hook]";
+const PLUGIN_ID = "persisted-copy-rewrite-proof";
 
 describe("chat.send same-ID retry input comparison across a real gateway restart", () => {
   const tempDirs = useAutoCleanupTempDirTracker(afterEach);
@@ -207,7 +219,44 @@ describe("chat.send same-ID retry input comparison across a real gateway restart
         if (!address || typeof address === "string") {
           throw new Error("loopback provider did not bind");
         }
+        const pluginDir = path.join(tempHome, "rewrite-hook-plugin");
+        const pluginFile = path.join(pluginDir, "index.mjs");
+        await fs.mkdir(pluginDir, { recursive: true });
+        await fs.writeFile(
+          path.join(pluginDir, "openclaw.plugin.json"),
+          JSON.stringify({
+            id: PLUGIN_ID,
+            name: "Persisted Copy Rewrite Proof",
+            activation: { onStartup: true },
+            configSchema: { type: "object", properties: {}, additionalProperties: false },
+          }),
+        );
+        await fs.writeFile(
+          pluginFile,
+          [
+            `const SUFFIX = ${JSON.stringify(PERSISTED_SUFFIX)};`,
+            "export default {",
+            `  id: ${JSON.stringify(PLUGIN_ID)},`,
+            "  register(api) {",
+            `    api.on("before_message_write", (event) => {`,
+            "      const message = event?.message;",
+            '      if (!message || message.role !== "user" || typeof message.content !== "string") {',
+            "        return undefined;",
+            "      }",
+            "      return { message: { ...message, content: `${message.content}${SUFFIX}` } };",
+            "    });",
+            "  },",
+            "};",
+          ].join("\n"),
+        );
         const cfg = {
+          plugins: {
+            allow: [PLUGIN_ID],
+            load: { paths: [pluginFile] },
+            entries: {
+              [PLUGIN_ID]: { enabled: true, hooks: { allowConversationAccess: true } },
+            },
+          },
           agents: {
             defaults: {
               workspace: workspaceDir,
@@ -271,29 +320,82 @@ describe("chat.send same-ID retry input comparison across a real gateway restart
         // Gateway #2: fresh RAM on the same durable state. Restart recovery settles
         // the aborted first turn so its run id becomes durably terminal.
         gateway = await startGateway();
-        let redelivered = false;
-        const recoveryDeadline = Date.now() + 45_000;
-        while (Date.now() < recoveryDeadline) {
-          if (requests.length >= 2) {
-            redelivered = true;
+
+        // A legitimate same-ID resend of the original text must stay admitted even
+        // though the hook rewrote its persisted bytes: the admitted-input hash, not
+        // the rewritten transcript text, decides the comparison. Transient
+        // "transcript is rebuilding" admissions during recovery may retry.
+        let adopted: { status?: string; runId?: string } | undefined;
+        for (let attempt = 1; attempt <= 12 && !adopted; attempt += 1) {
+          try {
+            adopted = await sendChat(ORIGINAL_MESSAGE);
+          } catch (error) {
+            proof("legitimate_resend_retryable_error", {
+              attempt,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            await sleep(2_000);
+          }
+        }
+        proof("legitimate_resend_admitted", {
+          status: adopted?.status ?? null,
+          runId: adopted?.runId ?? null,
+        });
+        expect(adopted).toBeDefined();
+        expect(adopted!.runId).toBe(RUN_ID);
+        expect(["ok", "started"]).toContain(adopted!.status);
+
+        // The edited-retry assertion below relies on durable recovery evidence for
+        // the interrupted turn. Require the state the gateway actually produced
+        // instead of polling provider traffic (test/AGENTS.md).
+        const storePath = resolveSessionStorePathCore(undefined, { agentId: "main" });
+        const settleDeadline = Date.now() + 60_000;
+        let settledEntry: Record<string, unknown> | undefined;
+        let settled = false;
+        while (Date.now() < settleDeadline) {
+          const entry = loadSessionEntry({
+            agentId: "main",
+            storePath,
+            sessionKey: SESSION_KEY,
+          });
+          settledEntry = entry as unknown as Record<string, unknown> | undefined;
+          if (
+            entry &&
+            (hasRestartRecoveryTerminalRun(entry, RUN_ID) ||
+              entry.restartRecoveryDeliverySourceRunId === RUN_ID)
+          ) {
+            settled = true;
             break;
           }
-          await sleep(500);
+          await sleep(1_000);
         }
-        proof("recovery_redelivery_observed", { redelivered, requests: requests.length });
-        // A legitimate same-ID resend of the original text must stay admitted: the
-        // durable record replays the turn's acceptance without executing it again.
-        try {
-          const adopted = await sendChat(ORIGINAL_MESSAGE);
-          proof("legitimate_resend_admitted", {
-            status: adopted.status,
-            runId: adopted.runId,
-          });
-        } catch (error) {
-          proof("legitimate_resend_rejected", {
-            error: error instanceof Error ? error.message : String(error),
-          });
+        proof("recovery_state_required_for_retry_assertion", {
+          settled,
+          restartFacts: Object.keys(settledEntry ?? {})
+            .filter((key) => key.startsWith("restartRecovery") || key.startsWith("mainRestart"))
+            .map((key) => [key, JSON.stringify((settledEntry as Record<string, unknown>)[key])]),
+        });
+        expect(settled).toBe(true);
+        // Prove the hook really rewrote the persisted bytes: otherwise the admitted
+        // unchanged resend above could not distinguish the hash comparison from the
+        // legacy stored-text comparison.
+        const settledSessionId = settledEntry?.sessionId;
+        if (typeof settledSessionId !== "string" || settledSessionId.length === 0) {
+          throw new Error("recovery settlement did not record the session id");
         }
+        const storedSubmission = await readSessionSubmittedInput(
+          { agentId: "main", storePath, sessionKey: SESSION_KEY, sessionId: settledSessionId },
+          `${RUN_ID}:user`,
+        );
+        const storedRewritten =
+          typeof storedSubmission?.content === "string" &&
+          storedSubmission.content.includes(PERSISTED_SUFFIX);
+        proof("persisted_bytes_verified", {
+          storedHasRewriteSuffix: storedRewritten,
+          storedText:
+            typeof storedSubmission?.content === "string" ? storedSubmission.content : null,
+        });
+        expect(storedRewritten).toBe(true);
         const history = await gateway.client.request<{ messages?: unknown[] }>("chat.history", {
           sessionKey: SESSION_KEY,
           limit: 20,
@@ -306,27 +408,39 @@ describe("chat.send same-ID retry input comparison across a real gateway restart
         // The proof: resend the SAME idempotency key with EDITED text.
         let conflictObserved: { code?: unknown; message?: string; details?: unknown } | undefined;
         let editedExecuted = false;
-        try {
-          const resend = await sendChat(EDITED_MESSAGE);
-          proof("edited_resend_admitted_by_gateway", {
-            status: resend.status,
-            runId: resend.runId,
-          });
-          const editedDeadline = Date.now() + 120_000;
-          while (Date.now() < editedDeadline) {
-            if (requests.some((request) => request.allUserText.includes(EDITED_MESSAGE))) {
-              editedExecuted = true;
+        for (let attempt = 1; attempt <= 10 && !conflictObserved; attempt += 1) {
+          try {
+            const resend = await sendChat(EDITED_MESSAGE);
+            proof("edited_resend_admitted_by_gateway", {
+              status: resend.status,
+              runId: resend.runId,
+            });
+            const editedDeadline = Date.now() + 60_000;
+            while (Date.now() < editedDeadline) {
+              if (requests.some((request) => request.allUserText.includes(EDITED_MESSAGE))) {
+                editedExecuted = true;
+                break;
+              }
+              await sleep(500);
+            }
+            break;
+          } catch (error) {
+            conflictObserved = error as { code?: unknown; message?: string; details?: unknown };
+            const retryable =
+              String(conflictObserved.code ?? "").includes("UNAVAILABLE") ||
+              String(conflictObserved.message ?? "").includes("rebuilding; retry shortly");
+            proof("edited_resend_rejected_by_gateway", {
+              attempt,
+              retryable,
+              code: conflictObserved.code ?? null,
+              message: conflictObserved.message ?? null,
+              details: JSON.stringify(conflictObserved.details ?? null),
+            });
+            if (!retryable) {
               break;
             }
-            await sleep(500);
+            await sleep(2_000);
           }
-        } catch (error) {
-          conflictObserved = error as { code?: unknown; message?: string; details?: unknown };
-          proof("edited_resend_rejected_by_gateway", {
-            code: conflictObserved.code ?? null,
-            message: conflictObserved.message ?? null,
-            details: JSON.stringify(conflictObserved.details ?? null),
-          });
         }
         proof("verdict", {
           editedResendConflicted: conflictObserved !== undefined,

@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { sha256Hex } from "@openclaw/normalization-core/node-crypto";
 import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
@@ -77,6 +78,10 @@ export function buildPersistedUserTurnMetadata(
     ...(input.mentions?.length
       ? { humanMentions: input.mentions.map((mention) => ({ ...mention })) }
       : {}),
+    // Retry comparison evidence from the admitted input, not the persisted bytes:
+    // before_message_write hooks may rewrite stored content (e.g. redaction) while
+    // keeping the idempotency key, and the hash never restores unredacted text.
+    ...(input.text ? { submittedTextHash: sha256Hex(input.text) } : {}),
     ...(replyToId ? { replyToId } : {}),
     ...(replyPreviewText
       ? {

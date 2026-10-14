@@ -1,3 +1,4 @@
+import { sha256Hex } from "@openclaw/normalization-core/node-crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
 import {
@@ -472,6 +473,38 @@ describe("chat send retry identity", () => {
         expect(conflict).toMatchObject({
           details: { reason: "chat-request-conflict" },
         });
+      }
+    },
+  );
+
+  it.each(["matching", "mismatching"] as const)(
+    "treats %s submittedTextHash as authoritative over rewritten stored bytes",
+    async (variant) => {
+      const params = retryFixture(`rewritten-hash-${variant}`);
+      params.session.entry = {
+        sessionId: "mention-session",
+        updatedAt: 100,
+        restartRecoveryTerminalRunIds: [params.session.clientRunId],
+      };
+      vi.mocked(readSessionSubmittedInput).mockResolvedValue({
+        role: "user",
+        timestamp: 100,
+        content: "[redacted by before_message_write hook]",
+        __openclaw: {
+          submittedTextHash: sha256Hex(
+            variant === "matching" ? params.request.rawMessage : "different original",
+          ),
+        },
+      });
+      params.request.mentions = undefined;
+      const conflict = resolveChatSendRequestConflict(
+        params,
+        await prepareChatSendRetryComparison(params),
+      );
+      if (variant === "matching") {
+        expect(conflict).toBeUndefined();
+      } else {
+        expect(conflict).toMatchObject({ details: { reason: "chat-request-conflict" } });
       }
     },
   );
