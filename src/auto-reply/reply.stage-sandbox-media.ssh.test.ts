@@ -27,6 +27,13 @@ const sandboxMocks = vi.hoisted(() => ({
 }));
 vi.mock("../agents/sandbox.js", () => sandboxMocks);
 vi.mock("../agents/sandbox/context.js", () => sandboxMocks);
+vi.mock("../infra/device-identity-async.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../infra/device-identity-async.js")>()),
+  loadOrCreateProcessDeviceIdentityAsync: vi.fn(async () => ({
+    deviceId: "request-identity-fixture",
+    privateKeyPem: "synthetic-request-verifier-key",
+  })),
+}));
 const remoteSourceMocks = vi.hoisted(() => ({
   runCommandWithTimeout: vi.fn(),
   resolveChannelRemoteInboundAttachmentRoots: vi.fn(() => ["/remote/inbound"]),

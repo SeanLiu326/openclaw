@@ -49,7 +49,11 @@ describe("chat.send persisted request identity", () => {
         const replay = await fixture.send();
         expect(replay).toHaveBeenCalledWith(
           true,
-          expect.objectContaining({ runId: fixture.params.idempotencyKey, status: "aborted" }),
+          expect.objectContaining({
+            runId: fixture.params.idempotencyKey,
+            status: "timeout",
+            summary: "aborted",
+          }),
           undefined,
           expect.objectContaining({ cached: true }),
         );
