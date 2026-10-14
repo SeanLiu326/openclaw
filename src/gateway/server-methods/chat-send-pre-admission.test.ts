@@ -386,7 +386,7 @@ describe("chat send retry identity", () => {
         ok: true,
         payload: { runId: params.session.clientRunId, status: "ok" },
       });
-      vi.mocked(readSessionSubmittedInput).mockResolvedValue(null);
+      vi.mocked(readSessionSubmittedInput).mockResolvedValue(undefined);
       expect(respondChatSendRetry(params, await prepareChatSendRetryComparison(params))).toBe(true);
       expectConflict(params.respond);
       expect(readSessionSubmittedInput).toHaveBeenCalledOnce();
